@@ -30,84 +30,91 @@ const sampleGeoJSON = {
 
 function resizeCanvas() {
     const parent = document.getElementById('canvasContainer');
-    if (!parent) return;
-    canvas.width = parent.clientWidth;
-    canvas.height = parent.clientHeight;
+    const w = parent.clientWidth || window.innerWidth;
+    const h = parent.clientHeight || 400;
+    canvas.width = w;
+    canvas.height = h;
     if (renderer && camera) {
-        camera.aspect = parent.clientWidth / parent.clientHeight;
+        camera.aspect = w / h;
         camera.updateProjectionMatrix();
-        renderer.setSize(parent.clientWidth, parent.clientHeight);
+        renderer.setSize(w, h);
     }
-    if (activeMode === '2d') drawScene2D();
+    if (activeMode === '2d' && currentPolygon) drawScene2D();
 }
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+window.addEventListener('load', resizeCanvas);
 
-// Dosya Yükleme Dinleyicisi
-document.getElementById('geojsonInput').addEventListener('change', (e) => {
+// Dosya Yükleme
+document.getElementById('geojsonInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = function(event) {
         try {
-            const rawData = JSON.parse(event.target.result);
-            parseAndLoadGeoJSON(rawData);
+            const raw = JSON.parse(event.target.result);
+            handleGeoJSON(raw);
         } catch (err) {
-            alert("GeoJSON dosyası okunamadı! Geçerli bir JSON yükleyin.");
+            alert("Dosya okunamadı: " + err.message);
         }
     };
     reader.readAsText(file);
+    e.target.value = ''; // Aynı dosyayı tekrar seçebilmek için sıfırla
 });
 
-document.getElementById('loadSampleBtn').addEventListener('click', () => loadParcelData(sampleGeoJSON));
+document.getElementById('loadSampleBtn').addEventListener('click', function() {
+    handleGeoJSON(sampleGeoJSON);
+});
 
-// Esnek GeoJSON Parser (TKGM ve standart formatlar için)
-function parseAndLoadGeoJSON(data) {
+function handleGeoJSON(data) {
     let feature = null;
-
     if (data.type === 'FeatureCollection' && data.features && data.features.length > 0) {
         feature = data.features[0];
     } else if (data.type === 'Feature') {
         feature = data;
     } else if (data.type === 'Polygon' || data.type === 'MultiPolygon') {
         feature = { type: 'Feature', properties: {}, geometry: data };
+    } else if (Array.isArray(data) && data.length > 0) {
+        feature = data[0];
     }
 
     if (!feature || !feature.geometry) {
-        alert("Yüklenen dosyada geçerli parsel geometrisi bulunamadı!");
+        alert("Geçerli parsel sınır verisi bulunamadı.");
         return;
     }
 
-    // Eğer MultiPolygon ise ilk poligonu al
     if (feature.geometry.type === 'MultiPolygon') {
         feature.geometry.type = 'Polygon';
         feature.geometry.coordinates = feature.geometry.coordinates[0];
     }
 
-    loadParcelData(feature);
-}
+    // Z koordinatı (yükseklik) varsa temizle: [lon, lat, 0] -> [lon, lat]
+    feature.geometry.coordinates[0] = feature.geometry.coordinates[0].map(c => [c[0], c[1]]);
 
-function loadParcelData(feature) {
     currentPolygon = feature;
     setbackPolygon = null;
     generatedRooms = [];
     switchMode('2d');
 
     const props = feature.properties || {};
-    document.getElementById('mahalleInput').value = props.mahalle || props.MAHALLE || "Merkez Mah.";
-    document.getElementById('adaParselInput').value = (props.ada || props.ADA || "1") + " / " + (props.parsel || props.PARSEL || "1");
+    document.getElementById('mahalleInput').value = props.mahalle || props.Mahalle || props.MAHALLE || "Burhaniye";
+    const ada = props.ada || props.Ada || props.ADA || props.adaNo || "";
+    const parsel = props.parsel || props.Parsel || props.PARSEL || props.parselNo || "";
+    if (ada || parsel) document.getElementById('adaParselInput').value = `${ada} / ${parsel}`;
 
     const coords = feature.geometry.coordinates[0];
     edgesData = [];
     for (let i = 0; i < coords.length - 1; i++) {
         const p1 = turf.point(coords[i]);
         const p2 = turf.point(coords[i + 1]);
-        edgesData.push({
-            index: i, start: coords[i], end: coords[i + 1],
-            length: turf.distance(p1, p2, { units: 'kilometers' }) * 1000,
-            type: i === 0 ? 'yol' : 'komsu',
-            setback: i === 0 ? 3 : 1.5
-        });
+        const len = turf.distance(p1, p2, { units: 'kilometers' }) * 1000;
+        if (len > 0.05) { // Sıfır uzunluklu çift noktaları ele
+            edgesData.push({
+                index: i, start: coords[i], end: coords[i + 1],
+                length: len,
+                type: i === 0 ? 'yol' : 'komsu',
+                setback: i === 0 ? 3 : 1.5
+            });
+        }
     }
 
     renderEdgesUI();
@@ -115,8 +122,8 @@ function loadParcelData(feature) {
     document.getElementById('calculateBtn').disabled = false;
     document.getElementById('generatePlanBtn').disabled = true;
     document.getElementById('mode3dBtn').disabled = true;
-    document.getElementById('statusText').innerText = "Parsel başarıyla yüklendi.";
-    setTimeout(resizeCanvas, 100);
+    document.getElementById('statusText').innerText = "Parsel yüklendi (" + edgesData.length + " kenar)";
+    resizeCanvas();
     drawScene2D();
 }
 
@@ -149,20 +156,22 @@ window.updateEdgeType = (idx, val) => {
 function updateImarSummary() {
     if (!currentPolygon) return;
     const area = turf.area(currentPolygon);
-    const taks = parseFloat(document.getElementById('taksInput').value) || 0;
+    const taks = parseFloat(document.getElementById('taksInput').value) || 0.4;
     document.getElementById('imarOzet').innerText = `Parsel: ${area.toFixed(1)} m² | Max Taban: ${(area * taks).toFixed(1)} m²`;
 }
 
-// Çekme Hesaplama
 document.getElementById('calculateBtn').addEventListener('click', () => {
-    if (!currentPolygon) return;
+    if (!currentPolygon || edgesData.length < 3) return;
     try {
-        const coords = currentPolygon.geometry.coordinates[0];
         const center = turf.center(currentPolygon).geometry.coordinates;
         const mLat = 111320, mLon = 111320 * Math.cos(center[1] * Math.PI / 180);
 
+        const localPts = edgesData.map(e => ({
+            x: (e.start[0] - center[0]) * mLon,
+            y: (e.start[1] - center[1]) * mLat
+        }));
+
         let areaSum = 0;
-        const localPts = coords.slice(0, -1).map(c => ({ x: (c[0] - center[0]) * mLon, y: (c[1] - center[1]) * mLat }));
         for (let i = 0; i < localPts.length; i++) {
             const j = (i + 1) % localPts.length;
             areaSum += (localPts[j].x - localPts[i].x) * (localPts[j].y + localPts[i].y);
@@ -189,19 +198,13 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
         const newGeoCoords = newLocalPts.map(p => [center[0] + p.x / mLon, center[1] + p.y / mLat]);
         newGeoCoords.push(newGeoCoords[0]);
 
-        const tempPolygon = turf.polygon([newGeoCoords]);
-        if (turf.area(tempPolygon) <= 0) {
-            alert("Çekme mesafeleri parsel için çok büyük!");
-            return;
-        }
-
-        setbackPolygon = tempPolygon;
+        setbackPolygon = turf.polygon([newGeoCoords]);
         updateCoordsTable(newGeoCoords);
         document.getElementById('generatePlanBtn').disabled = false;
-        document.getElementById('statusText').innerText = "Çekme hesaplandı.";
+        document.getElementById('statusText').innerText = "Çekme hesaplandı!";
         drawScene2D();
     } catch (e) {
-        alert("Hesaplama hatası! Çekme mesafelerini kontrol edin.");
+        alert("Çekme hesaplama hatası: " + e.message);
     }
 });
 
@@ -213,32 +216,28 @@ document.getElementById('generatePlanBtn').addEventListener('click', () => {
     document.getElementById('catalogTitle').innerText = `${type} Katalog`;
     document.getElementById('catalogParcel').innerText = `${document.getElementById('mahalleInput').value} - ${document.getElementById('adaParselInput').value}`;
 
-    if (type === '2+1') {
-        generatedRooms = [
-            { id: 1, name: "Salon", area: totalNet * 0.32, color: "#e8dcc8", rx: 0, ry: 0.35, rw: 0.55, rh: 0.65, furniture: "sofa" },
-            { id: 2, name: "Yatak Odası", area: totalNet * 0.18, color: "#dfcbb2", rx: 0, ry: 0, rw: 0.55, rh: 0.35, furniture: "bed" },
-            { id: 3, name: "Çocuk Odası", area: totalNet * 0.16, color: "#e5d4be", rx: 0.55, ry: 0.48, rw: 0.25, rh: 0.52, furniture: "singlebed" },
-            { id: 4, name: "Mutfak", area: totalNet * 0.15, color: "#d8dee9", rx: 0.80, ry: 0.48, rw: 0.20, rh: 0.40, furniture: "kitchen" },
-            { id: 5, name: "Banyo", area: totalNet * 0.06, color: "#cbd5e1", rx: 0.55, ry: 0, rw: 0.25, rh: 0.24, furniture: "bath" },
-            { id: 6, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.55, ry: 0.24, rw: 0.45, rh: 0.24, furniture: "hall" },
-            { id: 7, name: "Balkon", area: totalNet * 0.05, color: "#94a3b8", rx: 0.80, ry: 0.88, rw: 0.20, rh: 0.12, furniture: "balcony" }
-        ];
-    } else {
-        generatedRooms = [
-            { id: 1, name: "Salon", area: totalNet * 0.30, color: "#e8dcc8", rx: 0, ry: 0.35, rw: 0.50, rh: 0.65, furniture: "sofa" },
-            { id: 2, name: "Ebeveyn Yatak", area: totalNet * 0.18, color: "#dfcbb2", rx: 0, ry: 0, rw: 0.50, rh: 0.35, furniture: "bed" },
-            { id: 3, name: "1. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.50, ry: 0.50, rw: 0.25, rh: 0.50, furniture: "singlebed" },
-            { id: 4, name: "2. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.75, ry: 0.50, rw: 0.25, rh: 0.50, furniture: "singlebed" },
-            { id: 5, name: "Mutfak", area: totalNet * 0.12, color: "#d8dee9", rx: 0.75, ry: 0.22, rw: 0.25, rh: 0.28, furniture: "kitchen" },
-            { id: 6, name: "Banyo", area: totalNet * 0.06, color: "#cbd5e1", rx: 0.50, ry: 0, rw: 0.25, rh: 0.22, furniture: "bath" },
-            { id: 7, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.50, ry: 0.22, rw: 0.25, rh: 0.28, furniture: "hall" }
-        ];
-    }
+    generatedRooms = type === '2+1' ? [
+        { id: 1, name: "Salon", area: totalNet * 0.32, color: "#e8dcc8", rx: 0, ry: 0.35, rw: 0.55, rh: 0.65 },
+        { id: 2, name: "Yatak Odası", area: totalNet * 0.18, color: "#dfcbb2", rx: 0, ry: 0, rw: 0.55, rh: 0.35 },
+        { id: 3, name: "Çocuk Odası", area: totalNet * 0.16, color: "#e5d4be", rx: 0.55, ry: 0.48, rw: 0.25, rh: 0.52 },
+        { id: 4, name: "Mutfak", area: totalNet * 0.15, color: "#d8dee9", rx: 0.80, ry: 0.48, rw: 0.20, rh: 0.40 },
+        { id: 5, name: "Banyo", area: totalNet * 0.06, color: "#cbd5e1", rx: 0.55, ry: 0, rw: 0.25, rh: 0.24 },
+        { id: 6, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.55, ry: 0.24, rw: 0.45, rh: 0.24 },
+        { id: 7, name: "Balkon", area: totalNet * 0.05, color: "#94a3b8", rx: 0.80, ry: 0.88, rw: 0.20, rh: 0.12 }
+    ] : [
+        { id: 1, name: "Salon", area: totalNet * 0.30, color: "#e8dcc8", rx: 0, ry: 0.35, rw: 0.50, rh: 0.65 },
+        { id: 2, name: "Ebeveyn Yatak", area: totalNet * 0.18, color: "#dfcbb2", rx: 0, ry: 0, rw: 0.50, rh: 0.35 },
+        { id: 3, name: "1. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.50, ry: 0.50, rw: 0.25, rh: 0.50 },
+        { id: 4, name: "2. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.75, ry: 0.50, rw: 0.25, rh: 0.50 },
+        { id: 5, name: "Mutfak", area: totalNet * 0.12, color: "#d8dee9", rx: 0.75, ry: 0.22, rw: 0.25, rh: 0.28 },
+        { id: 6, name: "Banyo", area: totalNet * 0.06, color: "#cbd5e1", rx: 0.50, ry: 0, rw: 0.25, rh: 0.22 },
+        { id: 7, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.50, ry: 0.22, rw: 0.25, rh: 0.28 }
+    ];
 
     updateRoomsTable(totalNet);
     document.getElementById('mode3dBtn').disabled = false;
     document.getElementById('downloadImgBtn').disabled = false;
-    document.getElementById('statusText').innerText = "Kat Planı Üretildi.";
+    document.getElementById('statusText').innerText = "2D Plan ve 3D Maket Hazır!";
     switchMode('2d');
 });
 
@@ -266,12 +265,11 @@ function drawScene2D() {
     if (!currentPolygon) return;
 
     const bbox = turf.bbox(currentPolygon);
-    const padding = 55;
+    const padding = 45;
     const latFactor = Math.cos(((bbox[1] + bbox[3]) / 2) * Math.PI / 180);
-    const scale = Math.min(
-        (canvas.width - padding * 2) / ((bbox[2] - bbox[0]) * latFactor),
-        (canvas.height - padding * 2) / (bbox[3] - bbox[1])
-    );
+    const spanX = (bbox[2] - bbox[0]) * latFactor || 0.0001;
+    const spanY = (bbox[3] - bbox[1]) || 0.0001;
+    const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
     const centerGeo = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 
     function toScreen(coord) {
@@ -281,12 +279,16 @@ function drawScene2D() {
         };
     }
 
-    edgesData.forEach(edge => {
+    edgesData.forEach((edge, i) => {
         const p1 = toScreen(edge.start), p2 = toScreen(edge.end);
         ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-        ctx.lineWidth = edge.type === 'yol' ? 4 : 2;
+        ctx.lineWidth = edge.type === 'yol' ? 5 : 2.5;
         ctx.strokeStyle = edge.type === 'yol' ? '#3b82f6' : '#f59e0b';
         ctx.stroke();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "11px sans-serif";
+        ctx.fillText(`K${i + 1}`, p1.x + 4, p1.y - 4);
     });
 
     if (setbackPolygon) {
@@ -305,32 +307,20 @@ function drawScene2D() {
 
         if (generatedRooms.length > 0) {
             ctx.clip();
-            const minX = Math.min(...screenPts.map(p => p.x));
-            const maxX = Math.max(...screenPts.map(p => p.x));
-            const minY = Math.min(...screenPts.map(p => p.y));
-            const maxY = Math.max(...screenPts.map(p => p.y));
+            const minX = Math.min(...screenPts.map(p => p.x)), maxX = Math.max(...screenPts.map(p => p.x));
+            const minY = Math.min(...screenPts.map(p => p.y)), maxY = Math.max(...screenPts.map(p => p.y));
             const w = maxX - minX, h = maxY - minY;
 
             generatedRooms.forEach(room => {
                 const x = minX + room.rx * w, y = minY + room.ry * h;
                 const rw = room.rw * w, rh = room.rh * h;
-
-                ctx.fillStyle = room.color;
-                ctx.fillRect(x, y, rw, rh);
-                ctx.strokeStyle = "#111827";
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x, y, rw, rh);
+                ctx.fillStyle = room.color; ctx.fillRect(x, y, rw, rh);
+                ctx.strokeStyle = "#111827"; ctx.lineWidth = 2; ctx.strokeRect(x, y, rw, rh);
 
                 const cx = x + rw / 2, cy = y + rh / 2;
-                ctx.fillStyle = "#ffffff";
-                ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = "#111827"; ctx.stroke();
-
-                ctx.fillStyle = "#111827";
-                ctx.font = "bold 9px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText(room.id, cx, cy + 3);
-                ctx.textAlign = "left";
+                ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#111827"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText(room.id, cx, cy + 3); ctx.textAlign = "left";
             });
         }
         ctx.restore();
@@ -344,7 +334,6 @@ function switchMode(mode) {
     activeMode = mode;
     document.getElementById('mode2dBtn').classList.toggle('active', mode === '2d');
     document.getElementById('mode3dBtn').classList.toggle('active', mode === '3d');
-
     if (mode === '2d') {
         canvas.style.display = 'block';
         threeContainer.style.display = 'none';
@@ -357,12 +346,12 @@ function switchMode(mode) {
 }
 
 function build3DIsometricModel() {
+    if (typeof THREE === 'undefined') { alert("3D motoru yükleniyor, tekrar deneyin."); return; }
     threeContainer.innerHTML = '';
-    const w = threeContainer.clientWidth, h = threeContainer.clientHeight;
+    const w = threeContainer.clientWidth || 350, h = threeContainer.clientHeight || 380;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf1f5f9);
-
     camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
     camera.position.set(14, 16, 14);
 
@@ -371,27 +360,23 @@ function build3DIsometricModel() {
     threeContainer.appendChild(renderer.domElement);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.75);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
-    const planW = 11, planD = 9;
-    const startX = -planW / 2, startZ = -planD / 2;
-
+    const planW = 11, planD = 9, startX = -planW / 2, startZ = -planD / 2;
     generatedRooms.forEach(room => {
         const rw = room.rw * planW, rd = room.rh * planD;
-        const cx = startX + room.rx * planW + rw / 2;
-        const cz = startZ + room.ry * planD + rd / 2;
-
-        const floor = new THREE.Mesh(
-            new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1),
-            new THREE.MeshStandardMaterial({ color: room.color })
-        );
+        const cx = startX + room.rx * planW + rw / 2, cz = startZ + room.ry * planD + rd / 2;
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1), new THREE.MeshStandardMaterial({ color: room.color }));
         floor.position.set(cx, 0.08, cz);
         scene.add(floor);
+
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const w1 = new THREE.Mesh(new THREE.BoxGeometry(rw, 1.5, 0.12), wallMat);
+        w1.position.set(cx, 0.75, cz - rd / 2);
+        scene.add(w1);
     });
 
     function animate() {
@@ -413,8 +398,6 @@ document.getElementById('downloadImgBtn').addEventListener('click', () => {
 document.getElementById('exportJsonBtn').addEventListener('click', () => {
     if (!setbackPolygon) return;
     const blob = new Blob([JSON.stringify(setbackPolygon, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = "koordinatlar.geojson";
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = "koordinatlar.geojson"; a.click();
 });
