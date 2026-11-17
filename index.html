@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PATRON - Vaziyet & Villa Maliyet Analizi</title>
+    <title>PATRON - Vaziyet & Maliyet Analizi</title>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <style>
         :root {
@@ -80,13 +80,14 @@
 
         <!-- 2. Çekmeler & Maliyet Parametreleri -->
         <div class="card">
-            <h2>2. Çekme Mesafeleri & Maliyet</h2>
+            <h2>2. Çekme Mesafeleri & Maliyet Parametreleri</h2>
             <div class="grid-2" style="margin-bottom: 8px;">
                 <div class="input-group">
                     <label>Kat Sayısı</label>
                     <select id="katSayisi">
-                        <option value="1">1 Katlı Villa</option>
-                        <option value="2" selected>2 Katlı Villa (Dubleks)</option>
+                        <option value="1">1 Katlı</option>
+                        <option value="2" selected>2 Katlı (Dubleks)</option>
+                        <option value="3">3 Katlı</option>
                     </select>
                 </div>
                 <div class="input-group">
@@ -97,7 +98,7 @@
             <div id="edgesList" style="max-height: 150px; overflow-y: auto; margin-bottom: 8px;">
                 <div style="color:var(--text-muted); text-align:center; font-size:11px;">Önce parsel yükleyin</div>
             </div>
-            <button id="calculateBtn" class="btn btn-accent" disabled>Vaziyet Çiz ve Villa Maliyeti Hesapla</button>
+            <button id="calculateBtn" class="btn btn-accent" disabled>Vaziyet Çiz ve Maliyeti Hesapla</button>
         </div>
 
         <!-- 3. 2D Vaziyet Çizim Ekranı -->
@@ -108,9 +109,9 @@
             </div>
         </div>
 
-        <!-- 4. Villa Oda Dağılımı ve Maliyet Tablosu -->
+        <!-- 4. Oda Dağılımı ve Maliyet Tablosu -->
         <div class="card">
-            <h2>Villa Oda Dağılımı & Bütçe Analizi</h2>
+            <h2>Oda Dağılımı & Bütçe Analizi</h2>
             <table>
                 <thead><tr><th>Mahal / Bölüm</th><th>Tahmini Alan</th></tr></thead>
                 <tbody id="roomsTableBody">
@@ -119,7 +120,7 @@
             </table>
             <div class="summary-box">
                 <span>Taban Oturumu: <strong id="tabanAlanTxt">0 m²</strong></span>
-                <span>Toplam İnşaat: <strong id="toplamInsaatTxt">0 m²</strong></span>
+                <span>Toplam Brüt (x1.3): <strong id="toplamInsaatTxt">0 m²</strong></span>
             </div>
             <div id="maliyetBox" style="margin-top:8px; padding:10px; background:rgba(114,28,36,0.2); border:1px solid #721c24; border-radius:5px; font-size:12px; text-align:center; font-weight:bold; color:#f8d7da;">
                 Tahmini Toplam Maliyet: 0 ₺
@@ -259,28 +260,29 @@
                 document.getElementById('tabanAlanTxt').innerText = netArea.toFixed(1) + " m²";
                 
                 const kat = parseInt(document.getElementById('katSayisi').value) || 2;
-                const toplamInsaat = netArea * kat;
+                
+                // İSTEDİĞİN FORMÜL: Taban Alanı x Kat Sayısı x 1.3
+                const toplamInsaat = netArea * kat * 1.3;
                 document.getElementById('toplamInsaatTxt').innerText = toplamInsaat.toFixed(1) + " m²";
 
                 const birimFiyat = parseFloat(document.getElementById('birimMaliyet').value) || 25000;
                 const toplamMaliyet = toplamInsaat * birimFiyat;
                 document.getElementById('maliyetBox').innerText = `Tahmini Toplam Maliyet: ${toplamMaliyet.toLocaleString('tr-TR')} ₺`;
 
-                // Villa Oda Önerileri Oluştur
-                generateVillaRooms(netArea, kat);
+                generateRooms(netArea, kat);
                 drawVaziyet();
             } catch(e) {
                 alert("Hesaplama hatası: " + e.message);
             }
         });
 
-        function generateVillaRooms(taban, kat) {
+        function generateRooms(taban, kat) {
             const tbody = document.getElementById('roomsTableBody');
             tbody.innerHTML = '';
 
             let rooms = [];
             if (kat === 2) {
-                const zeminNet = taban * 0.85; // Duvar payı düşülmüş net
+                const zeminNet = taban * 0.85;
                 const ustNet = taban * 0.85;
                 rooms = [
                     { name: "--- ZEMİN KAT ---", area: taban },
@@ -289,10 +291,19 @@
                     { name: "Antre & WC / Vestiyer", area: zeminNet * 0.15 },
                     { name: "Veranda / Teras (Dış)", area: taban * 0.20 },
                     { name: "--- 1. KAT ---", area: taban },
-                    { name: "Ebeveyn Yatak Odası (+Banyo/Giyinme)", area: ustNet * 0.40 },
+                    { name: "Ebeveyn Yatak Odası (+Banyo)", area: ustNet * 0.40 },
                     { name: "1. Çocuk / Misafir Odası", area: ustNet * 0.22 },
                     { name: "2. Çocuk Odası", area: ustNet * 0.22 },
                     { name: "Ortak Banyo", area: ustNet * 0.16 }
+                ];
+            } else if (kat === 3) {
+                const katNet = taban * 0.85;
+                rooms = [
+                    { name: "--- ZEMİN KAT ---", area: taban },
+                    { name: "Salon & Mutfak", area: katNet * 0.70 },
+                    { name: "Antre & WC", area: katNet * 0.30 },
+                    { name: "--- 1. & 2. KATLAR ---", area: taban * 2 },
+                    { name: "Yatak Odaları & Banyolar", area: katNet * 2 * 0.85 }
                 ];
             } else {
                 const zeminNet = taban * 0.80;
