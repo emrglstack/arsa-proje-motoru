@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PATRON - Vaziyet Planı</title>
+    <title>PATRON - Vaziyet & Villa Maliyet Analizi</title>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <style>
         :root {
@@ -41,13 +41,16 @@
         .btn-accent { background: var(--accent); color: #052e16; width: 100%; margin-top: 8px; }
 
         .canvas-box {
-            width: 100%; height: 400px; background: #101216; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid var(--border);
+            width: 100%; height: 380px; background: #101216; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid var(--border);
         }
         canvas { width: 100%; height: 100%; display: block; }
 
         .edge-row {
             display: grid; grid-template-columns: 45px 1fr 70px; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 11px;
         }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+        th, td { padding: 6px; border-bottom: 1px solid var(--border); text-align: left; }
+        th { color: var(--text-muted); }
         .summary-box {
             background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent); padding: 8px; border-radius: 5px; font-size: 11px; display: flex; justify-content: space-between; margin-top: 8px;
         }
@@ -56,8 +59,8 @@
 <body>
 
     <header class="mobile-header">
-        <h1>TOCO VAZİYET PLANLAMA</h1>
-        <span>Ölçülü Kenar & Çekme Kontrolü</span>
+        <h1>TOCO VAZİYET & MALİYET ANALİZİ</h1>
+        <span>Villa Yerleşim & Bütçe Planı</span>
     </header>
 
     <div class="app-container">
@@ -75,13 +78,26 @@
             </div>
         </div>
 
-        <!-- 2. Kenar Cephe & Çekme Tanımları -->
+        <!-- 2. Çekmeler & Maliyet Parametreleri -->
         <div class="card">
-            <h2>2. Kenar Çekme Mesafeleri (m)</h2>
-            <div id="edgesList" style="max-height: 180px; overflow-y: auto;">
+            <h2>2. Çekme Mesafeleri & Maliyet</h2>
+            <div class="grid-2" style="margin-bottom: 8px;">
+                <div class="input-group">
+                    <label>Kat Sayısı</label>
+                    <select id="katSayisi">
+                        <option value="1">1 Katlı Villa</option>
+                        <option value="2" selected>2 Katlı Villa (Dubleks)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Birim Maliyet (₺ / m²)</label>
+                    <input type="number" id="birimMaliyet" value="25000" step="1000">
+                </div>
+            </div>
+            <div id="edgesList" style="max-height: 150px; overflow-y: auto; margin-bottom: 8px;">
                 <div style="color:var(--text-muted); text-align:center; font-size:11px;">Önce parsel yükleyin</div>
             </div>
-            <button id="calculateBtn" class="btn btn-accent" disabled>Vaziyet Planını Çiz ve Hesapla</button>
+            <button id="calculateBtn" class="btn btn-accent" disabled>Vaziyet Çiz ve Villa Maliyeti Hesapla</button>
         </div>
 
         <!-- 3. 2D Vaziyet Çizim Ekranı -->
@@ -92,12 +108,21 @@
             </div>
         </div>
 
-        <!-- 4. Alan Bilgileri -->
+        <!-- 4. Villa Oda Dağılımı ve Maliyet Tablosu -->
         <div class="card">
-            <h2>Parsel & Yapı Alan Özeti</h2>
+            <h2>Villa Oda Dağılımı & Bütçe Analizi</h2>
+            <table>
+                <thead><tr><th>Mahal / Bölüm</th><th>Tahmini Alan</th></tr></thead>
+                <tbody id="roomsTableBody">
+                    <tr><td colspan="2" style="text-align:center; color:var(--text-muted);">Hesaplama bekleniyor</td></tr>
+                </tbody>
+            </table>
             <div class="summary-box">
-                <span>Parsel Alanı: <strong id="parselAlanTxt">0 m²</strong></span>
-                <span>Bina Oturumu: <strong id="oturumAlanTxt">0 m²</strong></span>
+                <span>Taban Oturumu: <strong id="tabanAlanTxt">0 m²</strong></span>
+                <span>Toplam İnşaat: <strong id="toplamInsaatTxt">0 m²</strong></span>
+            </div>
+            <div id="maliyetBox" style="margin-top:8px; padding:10px; background:rgba(114,28,36,0.2); border:1px solid #721c24; border-radius:5px; font-size:12px; text-align:center; font-weight:bold; color:#f8d7da;">
+                Tahmini Toplam Maliyet: 0 ₺
             </div>
         </div>
     </div>
@@ -165,23 +190,11 @@
             for (let i = 0; i < currentCoords.length - 1; i++) {
                 const p1 = currentCoords[i], p2 = currentCoords[i+1];
                 const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-                edgesData.push({
-                    length: len,
-                    setback: i === 0 ? 5 : 3
-                });
+                edgesData.push({ length: len, setback: i === 0 ? 5 : 3 });
             }
 
             renderEdgesUI();
             document.getElementById('calculateBtn').disabled = false;
-
-            let area = 0;
-            for (let i = 0; i < currentCoords.length - 1; i++) {
-                area += (currentCoords[i+1][0] - currentCoords[i][0]) * (currentCoords[i+1][1] + currentCoords[i][1]);
-            }
-            area = Math.abs(area / 2);
-            document.getElementById('parselAlanTxt').innerText = area.toFixed(1) + " m²";
-            document.getElementById('oturumAlanTxt').innerText = "0 m²";
-
             drawVaziyet();
         }
 
@@ -243,12 +256,62 @@
                 }
 
                 setbackPolygonCoords = newPts;
-                document.getElementById('oturumAlanTxt').innerText = netArea.toFixed(1) + " m²";
+                document.getElementById('tabanAlanTxt').innerText = netArea.toFixed(1) + " m²";
+                
+                const kat = parseInt(document.getElementById('katSayisi').value) || 2;
+                const toplamInsaat = netArea * kat;
+                document.getElementById('toplamInsaatTxt').innerText = toplamInsaat.toFixed(1) + " m²";
+
+                const birimFiyat = parseFloat(document.getElementById('birimMaliyet').value) || 25000;
+                const toplamMaliyet = toplamInsaat * birimFiyat;
+                document.getElementById('maliyetBox').innerText = `Tahmini Toplam Maliyet: ${toplamMaliyet.toLocaleString('tr-TR')} ₺`;
+
+                // Villa Oda Önerileri Oluştur
+                generateVillaRooms(netArea, kat);
                 drawVaziyet();
             } catch(e) {
                 alert("Hesaplama hatası: " + e.message);
             }
         });
+
+        function generateVillaRooms(taban, kat) {
+            const tbody = document.getElementById('roomsTableBody');
+            tbody.innerHTML = '';
+
+            let rooms = [];
+            if (kat === 2) {
+                const zeminNet = taban * 0.85; // Duvar payı düşülmüş net
+                const ustNet = taban * 0.85;
+                rooms = [
+                    { name: "--- ZEMİN KAT ---", area: taban },
+                    { name: "Salon & Yemek Alanı", area: zeminNet * 0.50 },
+                    { name: "Mutfak", area: zeminNet * 0.25 },
+                    { name: "Antre & WC / Vestiyer", area: zeminNet * 0.15 },
+                    { name: "Veranda / Teras (Dış)", area: taban * 0.20 },
+                    { name: "--- 1. KAT ---", area: taban },
+                    { name: "Ebeveyn Yatak Odası (+Banyo/Giyinme)", area: ustNet * 0.40 },
+                    { name: "1. Çocuk / Misafir Odası", area: ustNet * 0.22 },
+                    { name: "2. Çocuk Odası", area: ustNet * 0.22 },
+                    { name: "Ortak Banyo", area: ustNet * 0.16 }
+                ];
+            } else {
+                const zeminNet = taban * 0.80;
+                rooms = [
+                    { name: "Salon & Amerikan Mutfak", area: zeminNet * 0.45 },
+                    { name: "Ebeveyn Yatak Odası", area: zeminNet * 0.25 },
+                    { name: "Çocuk Odası", area: zeminNet * 0.18 },
+                    { name: "Banyo / WC", area: zeminNet * 0.12 }
+                ];
+            }
+
+            rooms.forEach(r => {
+                if (r.name.startsWith("---")) {
+                    tbody.innerHTML += `<tr style="background:#2a2e39; font-weight:bold;"><td colspan="2">${r.name}</td></tr>`;
+                } else {
+                    tbody.innerHTML += `<tr><td>${r.name}</td><td>~${r.area.toFixed(1)} m²</td></tr>`;
+                }
+            });
+        }
 
         function drawVaziyet() {
             if (currentCoords.length === 0) return;
@@ -264,9 +327,7 @@
             const spanX = (maxX - minX) || 1;
             const spanY = (maxY - minY) || 1;
             const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
-            
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
+            const centerX = (minX + maxX) / 2, centerY = (minY + maxY) / 2;
 
             function toScreen(pt) {
                 return {
@@ -275,28 +336,21 @@
                 };
             }
 
-            // 1. Dış Parsel Sınırını Çiz (Mavi)
+            // Dış Parsel (Mavi)
             ctx.beginPath();
             currentCoords.forEach((pt, i) => {
                 const s = toScreen(pt);
                 if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
             });
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#3b82f6';
-            ctx.stroke();
+            ctx.lineWidth = 3; ctx.strokeStyle = '#3b82f6'; ctx.stroke();
 
-            // Dış parsel kenar uzunlukları
             for (let i = 0; i < currentCoords.length - 1; i++) {
-                const p1 = toScreen(currentCoords[i]);
-                const p2 = toScreen(currentCoords[i+1]);
-                const midX = (p1.x + p2.x) / 2;
-                const midY = (p1.y + p2.y) / 2;
-                ctx.fillStyle = "#ffffff";
-                ctx.font = "10px sans-serif";
-                ctx.fillText(`K${i+1}: ${edgesData[i].length.toFixed(1)}m`, midX - 15, midY - 5);
+                const p1 = toScreen(currentCoords[i]), p2 = toScreen(currentCoords[i+1]);
+                ctx.fillStyle = "#ffffff"; ctx.font = "10px sans-serif";
+                ctx.fillText(`K${i+1}: ${edgesData[i].length.toFixed(1)}m`, (p1.x + p2.x)/2 - 15, (p1.y + p2.y)/2 - 5);
             }
 
-            // 2. İç Bina Oturum Alanını Çiz (Yeşil) ve Kenar Ölçülerini Yaz
+            // İç Bina Oturumu (Yeşil)
             if (setbackPolygonCoords) {
                 ctx.beginPath();
                 setbackPolygonCoords.forEach((pt, i) => {
@@ -304,37 +358,23 @@
                     if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
                 });
                 ctx.closePath();
-                ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
-                ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = "#10b981";
-                ctx.stroke();
+                ctx.fillStyle = "rgba(16, 185, 129, 0.25)"; ctx.fill();
+                ctx.lineWidth = 2; ctx.strokeStyle = "#10b981"; ctx.stroke();
 
-                // Yeşil alanın kenar uzunluklarını hesapla ve yaz
                 for (let i = 0; i < setbackPolygonCoords.length - 1; i++) {
-                    const sp1 = setbackPolygonCoords[i];
-                    const sp2 = setbackPolygonCoords[i+1];
+                    const sp1 = setbackPolygonCoords[i], sp2 = setbackPolygonCoords[i+1];
                     const lenBina = Math.hypot(sp2[0] - sp1[0], sp2[1] - sp1[1]);
-                    
-                    const screen1 = toScreen(sp1);
-                    const screen2 = toScreen(sp2);
-                    const mX = (screen1.x + screen2.x) / 2;
-                    const mY = (screen1.y + screen2.y) / 2;
-
-                    ctx.fillStyle = "#a7f3d0";
-                    ctx.font = "9px sans-serif";
-                    ctx.fillText(`${lenBina.toFixed(1)}m`, mX - 10, mY - 3);
+                    const sc1 = toScreen(sp1), sc2 = toScreen(sp2);
+                    ctx.fillStyle = "#a7f3d0"; ctx.font = "9px sans-serif";
+                    ctx.fillText(`${lenBina.toFixed(1)}m`, (sc1.x + sc2.x)/2 - 10, (sc1.y + sc2.y)/2 - 3);
                 }
 
                 let bCX = 0, bCY = 0;
                 setbackPolygonCoords.forEach(p => { const s = toScreen(p); bCX += s.x; bCY += s.y; });
                 bCX /= setbackPolygonCoords.length; bCY /= setbackPolygonCoords.length;
 
-                ctx.fillStyle = "#10b981";
-                ctx.font = "bold 10px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("BİNA OTURUM", bCX, bCY - 6);
-                ctx.fillText("ALANI", bCX, bCY + 6);
+                ctx.fillStyle = "#10b981"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText("BİNA OTURUM", bCX, bCY - 6); ctx.fillText("ALANI", bCX, bCY + 6);
                 ctx.textAlign = "left";
             }
         }
