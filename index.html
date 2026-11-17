@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PATRON - 2D Vaziyet Planı</title>
+    <title>PATRON - Vaziyet Planı</title>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <style>
         :root {
@@ -41,12 +41,12 @@
         .btn-accent { background: var(--accent); color: #052e16; width: 100%; margin-top: 8px; }
 
         .canvas-box {
-            width: 100%; height: 400px; background: #101216; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid var(--border);
+            width: 100%; height: 380px; background: #101216; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid var(--border);
         }
         canvas { width: 100%; height: 100%; display: block; }
 
         .edge-row {
-            display: grid; grid-template-columns: 45px 1fr 1fr; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 11px;
+            display: grid; grid-template-columns: 45px 1fr 70px; gap: 6px; align-items: center; margin-bottom: 6px; font-size: 11px;
         }
         .summary-box {
             background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent); padding: 8px; border-radius: 5px; font-size: 11px; display: flex; justify-content: space-between; margin-top: 8px;
@@ -57,7 +57,7 @@
 
     <header class="mobile-header">
         <h1>TOCO VAZİYET PLANLAMA</h1>
-        <span>Ölçülü Kenar & Cephe Analizi</span>
+        <span>Ölçülü Kenar & Çekme Kontrolü</span>
     </header>
 
     <div class="app-container">
@@ -77,7 +77,7 @@
 
         <!-- 2. Kenar Cephe & Çekme Tanımları -->
         <div class="card">
-            <h2>2. Kenar Cephe & Çekme Mesafeleri</h2>
+            <h2>2. Kenar Çekme Mesafeleri (m)</h2>
             <div id="edgesList" style="max-height: 180px; overflow-y: auto;">
                 <div style="color:var(--text-muted); text-align:center; font-size:11px;">Önce parsel yükleyin</div>
             </div>
@@ -97,7 +97,7 @@
             <h2>Parsel & Yapı Alan Özeti</h2>
             <div class="summary-box">
                 <span>Parsel Alanı: <strong id="parselAlanTxt">0 m²</strong></span>
-                <span>Max Oturum (TAKS): <strong id="oturumAlanTxt">0 m²</strong></span>
+                <span>Bina Oturumu: <strong id="oturumAlanTxt">0 m²</strong></span>
             </div>
         </div>
     </div>
@@ -106,35 +106,29 @@
         const canvas = document.getElementById('planCanvas');
         const ctx = canvas.getContext('2d');
 
-        let currentPolygon = null;
-        let setbackPolygon = null;
+        let currentCoords = []; // Yerel metre koordinatları [x, y]
+        let currentGeoPolygon = null;
         let edgesData = [];
+        let setbackPolygonCoords = null;
 
-        const sampleGeoJSON = {
-            "type": "Feature",
-            "properties": { "mahalle": "Şarköy Mah.", "ada": "142", "parsel": "8" },
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [[
-                    [26.9680, 39.4980],
-                    [26.9688, 39.4981],
-                    [26.9689, 39.4973],
-                    [26.9681, 39.4972],
-                    [26.9680, 39.4980]
-                ]]
-            }
-        };
+        const samplePolygon = [
+            [0, 0],
+            [18, 0],
+            [19, 22],
+            [2, 20],
+            [0, 0]
+        ];
 
         function resizeCanvas() {
             const parent = document.getElementById('canvasContainer');
             canvas.width = parent.clientWidth;
             canvas.height = parent.clientHeight;
-            if (currentPolygon) drawVaziyet();
+            if (currentCoords.length > 0) drawVaziyet();
         }
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 100);
 
-        document.getElementById('loadSampleBtn').addEventListener('click', () => loadParcel(sampleGeoJSON));
+        document.getElementById('loadSampleBtn').addEventListener('click', () => loadLocalCoords(samplePolygon, "Şarköy Mah.", "142 / 8"));
 
         document.getElementById('geojsonInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -144,44 +138,52 @@
                 try {
                     const raw = JSON.parse(event.target.result);
                     let feat = raw.type === 'FeatureCollection' ? raw.features[0] : raw;
-                    if (feat && feat.geometry) loadParcel(feat);
-                    else alert("Geçersiz GeoJSON dosyası!");
-                } catch(err) { alert("Dosya okunamadı!"); }
+                    if (feat && feat.geometry) {
+                        let coords = feat.geometry.coordinates[0];
+                        if (feat.geometry.type === 'MultiPolygon') coords = feat.geometry.coordinates[0][0];
+                        
+                        // Coğrafi koordinatları metreye çevir
+                        const first = coords[0];
+                        const mLat = 111320, mLon = 111320 * Math.cos(first[1] * Math.PI / 180);
+                        const local = coords.map(c => [(c[0] - first[0]) * mLon, (c[1] - first[1]) * mLat]);
+                        
+                        const props = feat.properties || {};
+                        loadLocalCoords(local, props.mahalle || props.MAHALLE || "Merkez", (props.ada || "1") + " / " + (props.parsel || "1"));
+                    } else {
+                        alert("Geçersiz GeoJSON!");
+                    }
+                } catch(err) { alert("Dosya okunamadı: " + err.message); }
             };
             reader.readAsText(file);
         });
 
-        function loadParcel(feature) {
-            if (feature.geometry.type === 'MultiPolygon') {
-                feature.geometry.type = 'Polygon';
-                feature.geometry.coordinates = feature.geometry.coordinates[0];
-            }
-            currentPolygon = feature;
-            setbackPolygon = null;
+        function loadLocalCoords(pts, mahalle, adaParsel) {
+            currentCoords = pts;
+            setbackPolygonCoords = null;
+            document.getElementById('mahalleInput').value = mahalle;
+            document.getElementById('adaParselInput').value = adaParsel;
 
-            const props = feature.properties || {};
-            document.getElementById('mahalleInput').value = props.mahalle || props.MAHALLE || "Merkez";
-            document.getElementById('adaParselInput').value = (props.ada || "1") + " / " + (props.parsel || "1");
-
-            const coords = feature.geometry.coordinates[0];
             edgesData = [];
-            for (let i = 0; i < coords.length - 1; i++) {
-                const p1 = turf.point(coords[i]), p2 = turf.point(coords[i+1]);
-                const lenMeters = turf.distance(p1, p2, {units: 'meters'});
+            for (let i = 0; i < currentCoords.length - 1; i++) {
+                const p1 = currentCoords[i], p2 = currentCoords[i+1];
+                const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
                 edgesData.push({
-                    index: i,
-                    length: lenMeters,
-                    type: i === 0 ? 'yol' : 'komsu', // İlk kenar varsayılan yol
-                    setback: i === 0 ? 5 : 3        // Yol 5m, Komşu 3m
+                    length: len,
+                    setback: i === 0 ? 5 : 3 // Yol 5m, diğerleri 3m varsayılan
                 });
             }
 
             renderEdgesUI();
             document.getElementById('calculateBtn').disabled = false;
-            
-            const pArea = turf.area(currentPolygon);
-            document.getElementById('parselAlanTxt').innerText = pArea.toFixed(1) + " m²";
-            document.getElementById('oturumAlanTxt').innerText = (pArea * 0.4).toFixed(1) + " m²";
+
+            // Alan hesapla
+            let area = 0;
+            for (let i = 0; i < currentCoords.length - 1; i++) {
+                area += (currentCoords[i+1][0] - currentCoords[i][0]) * (currentCoords[i+1][1] + currentCoords[i][1]);
+            }
+            area = Math.abs(area / 2);
+            document.getElementById('parselAlanTxt').innerText = area.toFixed(1) + " m²";
+            document.getElementById('oturumAlanTxt').innerText = "0 m²";
 
             drawVaziyet();
         }
@@ -194,74 +196,58 @@
                 div.className = 'edge-row';
                 div.innerHTML = `
                     <span><strong>K${idx+1}</strong> (${edge.length.toFixed(1)}m)</span>
-                    <select onchange="updateEdge(${idx}, 'type', this.value)" style="background:#0f1115; color:white; border:1px solid var(--border); padding:4px; border-radius:4px;">
-                        <option value="yol" ${edge.type==='yol'?'selected':''}>Yol (5m Çekme)</option>
-                        <option value="komsu" ${edge.type==='komsu'?'selected':''}>Komşu (3m Çekme)</option>
-                        <option value="bitisik" ${edge.type==='bitisik'?'selected':''}>Bitişik (0m)</option>
-                    </select>
-                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="updateEdge(${idx}, 'setback', this.value)" style="background:#0f1115; color:white; border:1px solid var(--border); padding:4px; border-radius:4px; text-align:center;" title="Çekme (m)">
+                    <span style="font-size:10px; color:var(--text-muted); text-align:right;">Çekme (m):</span>
+                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="edgesData[${idx}].setback = parseFloat(this.value)||0" style="background:#0f1115; color:white; border:1px solid var(--border); padding:4px; border-radius:4px; text-align:center;">
                 `;
                 container.appendChild(div);
             });
         }
 
-        window.updateEdge = (idx, field, val) => {
-            if (field === 'type') {
-                edgesData[idx].type = val;
-                edgesData[idx].setback = val === 'yol' ? 5 : (val === 'komsu' ? 3 : 0);
-                renderEdgesUI();
-            } else {
-                edgesData[idx].setback = parseFloat(val) || 0;
-            }
-        };
-
-        loadParcel(sampleGeoJSON);
+        loadLocalCoords(samplePolygon, "Şarköy Mah.", "142 / 8");
 
         document.getElementById('calculateBtn').addEventListener('click', () => {
-            if (!currentPolygon) return;
+            if (currentCoords.length === 0) return;
             try {
-                const coords = currentPolygon.geometry.coordinates[0];
-                const center = turf.center(currentPolygon).geometry.coordinates;
-                const mLat = 111320, mLon = 111320 * Math.cos(center[1] * Math.PI / 180);
-
+                // Metre bazlı güvenli içe öteleme (setback) hesabı
                 let areaSum = 0;
-                const localPts = coords.slice(0, -1).map(c => ({ x: (c[0] - center[0]) * mLon, y: (c[1] - center[1]) * mLat }));
-                for (let i = 0; i < localPts.length; i++) {
-                    const j = (i + 1) % localPts.length;
-                    areaSum += (localPts[j].x - localPts[i].x) * (localPts[j].y + localPts[i].y);
+                for (let i = 0; i < currentCoords.length - 1; i++) {
+                    areaSum += (currentCoords[i+1][0] - currentCoords[i][0]) * (currentCoords[i+1][1] + currentCoords[i][1]);
                 }
                 const isClockwise = areaSum > 0;
 
-                const offsetLines = localPts.map((p1, i) => {
-                    const p2 = localPts[(i + 1) % localPts.length];
-                    const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy);
-                    if (len === 0) return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+                const offsetLines = currentCoords.slice(0, -1).map((p1, i) => {
+                    const p2 = currentCoords[(i + 1) % (currentCoords.length - 1)];
+                    const dx = p2[0] - p1[0], dy = p2[1] - p1[1], len = Math.hypot(dx, dy);
+                    if (len === 0) return { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1] };
                     const nx = isClockwise ? dy / len : -dy / len;
                     const ny = isClockwise ? -dx / len : dx / len;
                     const d = edgesData[i].setback;
-                    return { x1: p1.x + nx * d, y1: p1.y + ny * d, x2: p2.x + nx * d, y2: p2.y + ny * d };
+                    return { x1: p1[0] + nx * d, y1: p1[1] + ny * d, x2: p2[0] + nx * d, y2: p2[1] + ny * d };
                 });
 
-                const newLocalPts = offsetLines.map((l2, i) => {
+                const newPts = offsetLines.map((l2, i) => {
                     const l1 = offsetLines[(i - 1 + offsetLines.length) % offsetLines.length];
                     const denom = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1.y1 - l1.y2) * (l2.x1 - l2.x2);
-                    if (Math.abs(denom) < 1e-9) return { x: l2.x1, y: l2.y1 };
+                    if (Math.abs(denom) < 1e-9) return [l2.x1, l2.y1];
                     const t = ((l1.x1 - l2.x1) * (l2.y1 - l2.y2) - (l1.y1 - l2.y1) * (l2.x1 - l2.x2)) / denom;
-                    return { x: l1.x1 + t * (l1.x2 - l1.x1), y: l1.y1 + t * (l1.y2 - l1.y1);
+                    return [l1.x1 + t * (l1.x2 - l1.x1), l1.y1 + t * (l1.y2 - l1.y1)];
                 });
+                newPts.push(newPts[0]);
 
-                const newGeoCoords = newLocalPts.map(p => [center[0] + p.x / mLon, center[1] + p.y / mLat]);
-                newGeoCoords.push(newGeoCoords[0]);
+                // Net oturum alanı hesapla
+                let netArea = 0;
+                for (let i = 0; i < newPts.length - 1; i++) {
+                    netArea += (newPts[i+1][0] - newPts[i][0]) * (newPts[i+1][1] + newPts[i][1]);
+                }
+                netArea = Math.abs(netArea / 2);
 
-                setbackPolygon = turf.polygon([newGeoCoords]);
-                
-                const netArea = turf.area(setbackPolygon);
                 if (netArea <= 0) {
                     alert("Girilen çekme mesafeleri çok büyük, bina alanı kalmadı!");
-                    setbackPolygon = null;
+                    setbackPolygonCoords = null;
                     return;
                 }
 
+                setbackPolygonCoords = newPts;
                 document.getElementById('oturumAlanTxt').innerText = netArea.toFixed(1) + " m²";
                 drawVaziyet();
             } catch(e) {
@@ -270,54 +256,59 @@
         });
 
         function drawVaziyet() {
-            if (!currentPolygon) return;
+            if (currentCoords.length === 0) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            const bbox = turf.bbox(currentPolygon);
-            const padding = 45;
-            const latFactor = Math.cos(((bbox[1] + bbox[3]) / 2) * Math.PI / 180);
-            const spanX = (bbox[2] - bbox[0]) * latFactor || 0.001;
-            const spanY = (bbox[3] - bbox[1]) || 0.001;
-            const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
-            const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+            // Min-Max sınırları bul
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            currentCoords.forEach(p => {
+                if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
+                if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1];
+            });
 
-            function toScreen(coord) {
+            const padding = 45;
+            const spanX = (maxX - minX) || 1;
+            const spanY = (maxY - minY) || 1;
+            const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
+            
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            function toScreen(pt) {
                 return {
-                    x: canvas.width / 2 + (coord[0] - center[0]) * latFactor * scale,
-                    y: canvas.height / 2 - (coord[1] - center[1]) * scale
+                    x: canvas.width / 2 + (pt[0] - centerX) * scale,
+                    y: canvas.height / 2 - (pt[1] - centerY) * scale // Y ekseni ters çevrilir
                 };
             }
 
-            const coords = currentPolygon.geometry.coordinates[0];
+            // 1. Parsel Sınırını Çiz (Mavi)
+            ctx.beginPath();
+            currentCoords.forEach((pt, i) => {
+                const s = toScreen(pt);
+                if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+            });
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#3b82f6';
+            ctx.stroke();
 
-            // 1. Parsel Sınırlarını ve Kenar Etiketlerini Çiz
-            for (let i = 0; i < coords.length - 1; i++) {
-                const p1 = toScreen(coords[i]);
-                const p2 = toScreen(coords[i+1]);
-                const edge = edgesData[i];
-
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-                ctx.lineTo(p2.x, p2.y);
-                ctx.lineWidth = edge.type === 'yol' ? 4 : 2.5;
-                ctx.strokeStyle = edge.type === 'yol' ? '#3b82f6' : '#f59e0b'; // Yol Mavi, Komşu Turuncu
-                ctx.stroke();
-
-                // Kenar uzunluğu ve tip yazısı
+            // Kenar uzunluklarını yaz
+            for (let i = 0; i < currentCoords.length - 1; i++) {
+                const p1 = toScreen(currentCoords[i]);
+                const p2 = toScreen(currentCoords[i+1]);
                 const midX = (p1.x + p2.x) / 2;
                 const midY = (p1.y + p2.y) / 2;
                 ctx.fillStyle = "#ffffff";
                 ctx.font = "10px sans-serif";
-                ctx.fillText(`K${i+1}: ${edge.length.toFixed(1)}m (${edge.type === 'yol' ? 'Yol 5m' : 'Komşu 3m'})`, midX - 30, midY - 5);
+                ctx.fillText(`K${i+1}: ${edgesData[i].length.toFixed(1)}m`, midX - 15, midY - 5);
             }
 
-            // 2. Çekme Sınırı / Bina Oturum Alanı (Yeşil)
-            if (setbackPolygon) {
-                const sCoords = setbackPolygon.geometry.coordinates[0];
-                const screenPts = sCoords.map(toScreen);
-
+            // 2. Çekme Sınırı / Bina Oturum Alanını Çiz (Yeşil)
+            if (setbackPolygonCoords) {
                 ctx.beginPath();
-                screenPts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+                setbackPolygonCoords.forEach((pt, i) => {
+                    const s = toScreen(pt);
+                    if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+                });
                 ctx.closePath();
                 ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
                 ctx.fill();
@@ -325,13 +316,14 @@
                 ctx.strokeStyle = "#10b981";
                 ctx.stroke();
 
-                // Merkezine "BİNA OTURUM ALANI" yazısı
-                const bBox = turf.bbox(setbackPolygon);
-                const bCenter = toScreen([(bBox[0]+bBox[2])/2, (bBox[1]+bBox[3])/2]);
+                let bCX = 0, bCY = 0;
+                setbackPolygonCoords.forEach(p => { const s = toScreen(p); bCX += s.x; bCY += s.y; });
+                bCX /= setbackPolygonCoords.length; bCY /= setbackPolygonCoords.length;
+
                 ctx.fillStyle = "#10b981";
                 ctx.font = "bold 11px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText("BİNA OTURUM ALANI", bCenter.x, bCenter.y);
+                ctx.fillText("BİNA OTURUM ALANI", bCX, bCY);
                 ctx.textAlign = "left";
             }
         }
