@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arsa & İmar Etüt Motoru v0.1</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Geometrik hesaplamalar için Turf.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sol Kontrol Paneli -->
+        <aside class="sidebar">
+            <div class="brand-header">
+                <h1>TOCO MİMARİ ETÜT</h1>
+                <span class="version">v0.1 - Arsa & İmar Motoru</span>
+            </div>
+
+            <!-- 1. Adım: Parsel Yükleme -->
+            <section class="panel-box">
+                <h2>1. Parsel Verisi (TKGM)</h2>
+                <div class="file-upload">
+                    <label for="geojsonInput" class="btn btn-primary">GeoJSON Dosyası Yükle</label>
+                    <input type="file" id="geojsonInput" accept=".json,.geojson" hidden>
+                    <button id="loadSampleBtn" class="btn btn-secondary">Örnek Parsel Yükle</button>
+                </div>
+                <div class="grid-2">
+                    <div class="input-group">
+                        <label>İlçe / Mahalle</label>
+                        <input type="text" id="mahalleInput" placeholder="Örn: Şarköy Mah.">
+                    </div>
+                    <div class="input-group">
+                        <label>Ada / Parsel</label>
+                        <input type="text" id="adaParselInput" placeholder="Örn: 142 / 8">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. Adım: Belediye İmar Durumu -->
+            <section class="panel-box">
+                <h2>2. Belediye İmar Durumu</h2>
+                <div class="grid-3">
+                    <div class="input-group">
+                        <label>TAKS</label>
+                        <input type="number" id="taksInput" step="0.05" value="0.40">
+                    </div>
+                    <div class="input-group">
+                        <label>KAKS (Emsal)</label>
+                        <input type="number" id="kaksInput" step="0.10" value="0.80">
+                    </div>
+                    <div class="input-group">
+                        <label>Kat Adedi</label>
+                        <input type="number" id="katInput" value="2">
+                    </div>
+                </div>
+                <div class="summary-strip" id="imarOzet">
+                    Parsel Alanı: <strong>0 m²</strong> | Max Taban: <strong>0 m²</strong>
+                </div>
+            </section>
+
+            <!-- 3. Adım: Kenar & Çekme Mesafeleri -->
+            <section class="panel-box">
+                <h2>3. Cepheler & Çekme Payları (m)</h2>
+                <p class="hint">Parsel kenarlarının yola veya komşuya göre çekme mesafesini ayarlayın:</p>
+                <div id="edgesList" class="edges-list">
+                    <div class="empty-msg">Önce parsel verisi yükleyin.</div>
+                </div>
+                <button id="calculateBtn" class="btn btn-accent full-width" disabled>Çekme Sınırını Hesapla</button>
+            </section>
+        </aside>
+
+        <!-- Orta 2D Çizim Alanı -->
+        <main class="canvas-area">
+            <div class="canvas-toolbar">
+                <span id="statusText">Hazır - Parsel bekleniyor</span>
+                <div class="legend">
+                    <span><i class="dot parsel"></i> Parsel Sınırı</span>
+                    <span><i class="dot yol"></i> Yol Cephesi</span>
+                    <span><i class="dot komsu"></i> Komşu Parsel</span>
+                    <span><i class="dot bina"></i> Bina Oturumu</span>
+                </div>
+            </div>
+            <div class="canvas-wrapper">
+                <canvas id="planCanvas"></canvas>
+            </div>
+        </main>
+
+        <!-- Sağ Koordinat & Analiz Paneli -->
+        <aside class="right-panel">
+            <section class="panel-box">
+                <h2>Çekme Sonrası Köşe Noktaları</h2>
+                <div class="table-container">
+                    <table id="coordsTable">
+                        <thead>
+                            <tr>
+                                <th>Nokta</th>
+                                <th>Boylam (X)</th>
+                                <th>Enlem (Y)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="3" class="empty-msg">Hesaplama yapılmadı</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <button id="exportJsonBtn" class="btn btn-secondary full-width" disabled>Koordinatları İndir (JSON)</button>
+            </section>
+
+            <section class="panel-box">
+                <h2>Sonraki Aşama Hazırlığı</h2>
+                <div class="next-step-card">
+                    <p><strong>Net İnşaat Oturumu:</strong> <span id="netOturumAlan">0 m²</span></p>
+                    <p><strong>Toplam İnşaat Alanı:</strong> <span id="toplamInsaatAlan">0 m²</span></p>
+                    <button class="btn btn-disabled full-width" title="v0.2 sürümünde aktif edilecek">2D Kat Planı & Tefriş Oluştur (v0.2)</button>
+                </div>
+            </section>
+        </aside>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
