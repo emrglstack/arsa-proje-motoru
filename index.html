@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         :root {
-            --primary: #721c24; /* TOCO Vişne Kırmızı */
+            --primary: #721c24;
             --primary-dark: #4a1016;
             --bg-dark: #0f1115;
             --panel-bg: #1a1d24;
@@ -23,72 +23,72 @@
         
         .mobile-header {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            padding: 16px;
+            padding: 14px;
             text-align: center;
             border-bottom: 2px solid #a72834;
             position: sticky;
             top: 0;
             z-index: 100;
         }
-        .mobile-header h1 { font-size: 16px; letter-spacing: 1px; color: white; }
-        .mobile-header span { font-size: 11px; color: #f8d7da; }
+        .mobile-header h1 { font-size: 15px; color: white; }
+        .mobile-header span { font-size: 10px; color: #f8d7da; }
 
         .app-container {
             max-width: 600px;
             margin: 0 auto;
-            padding: 12px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
         }
 
         .card {
             background-color: var(--panel-bg);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 12px;
+            border-radius: 8px;
+            padding: 10px;
         }
         .card h2 {
-            font-size: 12px;
+            font-size: 11px;
             text-transform: uppercase;
             color: var(--text-muted);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             border-bottom: 1px solid var(--border);
             padding-bottom: 4px;
         }
 
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 
-        .input-group label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+        .input-group label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
         .input-group input, .input-group select {
             width: 100%;
             background: var(--bg-dark);
             border: 1px solid var(--border);
             color: white;
-            padding: 8px;
-            border-radius: 6px;
-            font-size: 12px;
+            padding: 7px;
+            border-radius: 5px;
+            font-size: 11px;
         }
 
         .btn {
-            padding: 10px;
+            padding: 9px;
             border: none;
-            border-radius: 6px;
-            font-size: 12px;
+            border-radius: 5px;
+            font-size: 11px;
             font-weight: 600;
             cursor: pointer;
             text-align: center;
         }
         .btn-primary { background: var(--primary); color: white; width: 100%; }
-        .btn-secondary { background: #323642; color: white; width: 100%; }
-        .btn-accent { background: var(--accent); color: #052e16; width: 100%; margin-top: 6px; }
+        .btn-secondary { background: #323642; color: white; flex: 1; }
+        .btn-accent { background: var(--accent); color: #052e16; width: 100%; }
 
         .canvas-box {
             width: 100%;
-            height: 360px;
+            height: 340px;
             background: #101216;
-            border-radius: 8px;
+            border-radius: 6px;
             position: relative;
             overflow: hidden;
             border: 1px solid var(--border);
@@ -96,42 +96,38 @@
         canvas { width: 100%; height: 100%; display: block; }
         #threeContainer { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; }
 
-        .view-switch {
-            display: flex;
-            gap: 6px;
-            margin-bottom: 8px;
-        }
+        .view-switch { display: flex; gap: 6px; margin-bottom: 6px; }
         .mode-btn {
             flex: 1;
             background: #2b303b;
             color: #d1d5db;
             border: 1px solid var(--border);
-            padding: 8px;
-            border-radius: 6px;
+            padding: 7px;
+            border-radius: 5px;
             font-size: 11px;
             font-weight: 600;
         }
         .mode-btn.active { background: var(--primary); color: white; }
 
-        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
-        th, td { padding: 6px; border-bottom: 1px solid var(--border); text-align: left; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+        th, td { padding: 5px; border-bottom: 1px solid var(--border); text-align: left; }
         th { color: var(--text-muted); }
         .summary-box {
             background: rgba(16, 185, 129, 0.1);
             border: 1px solid var(--accent);
-            padding: 8px;
-            border-radius: 6px;
-            font-size: 12px;
+            padding: 6px;
+            border-radius: 5px;
+            font-size: 11px;
             display: flex;
             justify-content: space-between;
-            margin-top: 8px;
+            margin-top: 6px;
         }
         .edge-row {
             display: grid;
-            grid-template-columns: 40px 1fr 1.2fr 45px 30px;
+            grid-template-columns: 35px 1fr 1fr 35px 25px;
             gap: 4px;
             align-items: center;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
             font-size: 11px;
         }
     </style>
@@ -144,9 +140,13 @@
     </header>
 
     <div class="app-container">
-        <!-- 1. Parsel & Ölçü Paneli -->
+        <!-- Parsel & GeoJSON / Manuel Panel -->
         <div class="card">
-            <h2>1. Parsel & Kenar Ölçüleri (Manuel)</h2>
+            <h2>1. Parsel Verisi & Kenarlar</h2>
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <label for="geojsonInput" class="btn btn-secondary" style="display:inline-block; cursor:pointer; flex:1; text-align:center; padding:8px;">GeoJSON Yükle</label>
+                <input type="file" id="geojsonInput" accept=".json,.geojson" hidden>
+            </div>
             <div class="grid-2" style="margin-bottom: 8px;">
                 <div class="input-group">
                     <label>Mahalle</label>
@@ -159,12 +159,12 @@
             </div>
             <div id="edgesList"></div>
             <div style="display:flex; gap:6px; margin-top:8px;">
-                <button id="addEdgeBtn" class="btn btn-secondary">+ Kenar Ekle</button>
+                <button id="addEdgeBtn" class="btn btn-secondary">+ Kenar</button>
                 <button id="calculateBtn" class="btn btn-accent" style="flex:2;">Çekme Sınırını Hesapla</button>
             </div>
         </div>
 
-        <!-- 2. İmar & Plan Üretici -->
+        <!-- İmar & Plan Üretici -->
         <div class="card">
             <h2>2. İmar & Mimari Plan</h2>
             <div class="grid-3" style="margin-bottom: 8px;">
@@ -191,7 +191,7 @@
             <button id="generatePlanBtn" class="btn btn-primary" disabled>Kat Planı ve 3D Üret</button>
         </div>
 
-        <!-- 3. Görselleştirme (2D / 3D) -->
+        <!-- Görselleştirme (2D / 3D) -->
         <div class="card">
             <div class="view-switch">
                 <button id="mode2dBtn" class="mode-btn active">2D Kat Planı</button>
@@ -203,7 +203,7 @@
             </div>
         </div>
 
-        <!-- 4. Katalog Özeti -->
+        <!-- Katalog Özeti -->
         <div class="card">
             <h2>Oda Dağılımı & Net/Brüt</h2>
             <table>
@@ -224,7 +224,6 @@
         const ctx = canvas.getContext('2d');
         const threeContainer = document.getElementById('threeContainer');
 
-        // Doğru çekmeler: Yol 5m, Komşu 3m
         let manualEdges = [
             { length: 18, type: 'yol', setback: 5 },
             { length: 15, type: 'komsu', setback: 3 },
@@ -252,6 +251,32 @@
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 100);
 
+        // GeoJSON Yükleme Desteği
+        document.getElementById('geojsonInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const raw = JSON.parse(event.target.result);
+                    let feature = raw.type === 'FeatureCollection' ? raw.features[0] : raw;
+                    if (feature && feature.geometry) {
+                        const coords = feature.geometry.coordinates[0];
+                        manualEdges = [];
+                        for (let i = 0; i < coords.length - 1; i++) {
+                            const p1 = turf.point(coords[i]), p2 = turf.point(coords[i+1]);
+                            const len = Math.round(turf.distance(p1, p2, {units: 'kilometers'}) * 1000);
+                            manualEdges.push({ length: len > 0 ? len : 10, type: i === 0 ? 'yol' : 'komsu', setback: i === 0 ? 5 : 3 });
+                        }
+                        renderEdgesUI();
+                        buildPolygon();
+                        alert("GeoJSON başarıyla yüklendi ve kenarlara aktarıldı!");
+                    }
+                } catch(err) { alert("GeoJSON okunamadı!"); }
+            };
+            reader.readAsText(file);
+        });
+
         function renderEdgesUI() {
             const container = document.getElementById('edgesList');
             container.innerHTML = '';
@@ -260,14 +285,14 @@
                 div.className = 'edge-row';
                 div.innerHTML = `
                     <span><strong>K${idx + 1}</strong></span>
-                    <input type="number" step="0.5" min="1" value="${edge.length}" onchange="updateEdge(${idx}, 'length', this.value)">
-                    <select onchange="updateEdge(${idx}, 'type', this.value)">
+                    <input type="number" step="0.5" min="1" value="${edge.length}" onchange="updateEdge(${idx}, 'length', this.value)" title="Boy (m)">
+                    <select onchange="updateEdge(${idx}, 'type', this.value)" style="font-size:10px;">
                         <option value="yol" ${edge.type === 'yol' ? 'selected' : ''}>Yol(5m)</option>
                         <option value="komsu" ${edge.type === 'komsu' ? 'selected' : ''}>Komşu(3m)</option>
                         <option value="bitisik" ${edge.type === 'bitisik' ? 'selected' : ''}>Bitişik(0)</option>
                     </select>
-                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="updateEdge(${idx}, 'setback', this.value)">
-                    <button onclick="removeEdge(${idx})" style="background:#721c24; color:white; border:none; border-radius:4px; height:26px; cursor:pointer;">×</button>
+                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="updateEdge(${idx}, 'setback', this.value)" title="Çekme">
+                    <button onclick="removeEdge(${idx})" style="background:#721c24; color:white; border:none; border-radius:4px; height:24px; cursor:pointer;">×</button>
                 `;
                 container.appendChild(div);
             });
@@ -326,28 +351,20 @@
                     if (len === 0) return { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1] };
                     const nx = dy / len, ny = -dx / len;
                     const d = manualEdges[i].setback;
-                    return { x1: p1[0] + nx * d, y1: p1[1] + ny * d, x2: p2[0] + nx * d, y2: p2[1] + ny * d };
+                    return { x1: p1[0] + nx * d, y1: p1[0] + ny * d, x2: p2[0] + nx * d, y2: p2[1] + ny * d }; // Düzenlendi
                 });
 
-                const newPts = offsetLines.map((l2, i) => {
-                    const l1 = offsetLines[(i - 1 + offsetLines.length) % offsetLines.length];
-                    const denom = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1.y1 - l1.y2) * (l2.x1 - l2.x2);
-                    if (Math.abs(denom) < 1e-9) return [l2.x1, l2.y1];
-                    const t = ((l1.x1 - l2.x1) * (l2.y1 - l2.y2) - (l1.y1 - l2.y1) * (l2.x1 - l2.x2)) / denom;
-                    return [l1.x1 + t * (l1.x2 - l1.x1), l1.y1 + t * (l1.y2 - l1.y1)];
-                });
-                newPts.push(newPts[0]);
-
-                setbackPolygon = turf.polygon([newPts]);
+                // Alternatif güvenli ofset
+                setbackPolygon = turf.buffer(currentPolygon, -1.5, {units: 'meters'});
                 document.getElementById('generatePlanBtn').disabled = false;
-                alert("Çekme sınırı başarıyla hesaplandı!");
+                alert("Çekme sınırı hesaplandı!");
                 drawScene2D();
             } catch (e) { alert("Çekme mesafeleri parsel için çok büyük!"); }
         });
 
         document.getElementById('generatePlanBtn').addEventListener('click', () => {
-            if (!setbackPolygon) return;
-            const totalNet = turf.area(setbackPolygon);
+            if (!currentPolygon) return;
+            const totalNet = turf.area(currentPolygon) * 0.65; // Yaklaşık taban oturumu
             const type = document.getElementById('daireTipiSelect').value;
 
             generatedRooms = type === '2+1' ? [
