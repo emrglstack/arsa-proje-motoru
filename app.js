@@ -30,6 +30,7 @@ const sampleGeoJSON = {
 
 function resizeCanvas() {
     const parent = document.getElementById('canvasContainer');
+    if (!parent) return;
     canvas.width = parent.clientWidth;
     canvas.height = parent.clientHeight;
     if (renderer && camera) {
@@ -42,32 +43,59 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+// Dosya Yükleme Dinleyicisi
 document.getElementById('geojsonInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
-        try { loadParcelData(JSON.parse(event.target.result)); }
-        catch (err) { alert("Geçersiz GeoJSON dosyası!"); }
+        try {
+            const rawData = JSON.parse(event.target.result);
+            parseAndLoadGeoJSON(rawData);
+        } catch (err) {
+            alert("GeoJSON dosyası okunamadı! Geçerli bir JSON yükleyin.");
+        }
     };
     reader.readAsText(file);
 });
 
 document.getElementById('loadSampleBtn').addEventListener('click', () => loadParcelData(sampleGeoJSON));
 
-function loadParcelData(geojson) {
-    const feature = geojson.type === 'FeatureCollection' ? geojson.features[0] : geojson;
+// Esnek GeoJSON Parser (TKGM ve standart formatlar için)
+function parseAndLoadGeoJSON(data) {
+    let feature = null;
+
+    if (data.type === 'FeatureCollection' && data.features && data.features.length > 0) {
+        feature = data.features[0];
+    } else if (data.type === 'Feature') {
+        feature = data;
+    } else if (data.type === 'Polygon' || data.type === 'MultiPolygon') {
+        feature = { type: 'Feature', properties: {}, geometry: data };
+    }
+
+    if (!feature || !feature.geometry) {
+        alert("Yüklenen dosyada geçerli parsel geometrisi bulunamadı!");
+        return;
+    }
+
+    // Eğer MultiPolygon ise ilk poligonu al
+    if (feature.geometry.type === 'MultiPolygon') {
+        feature.geometry.type = 'Polygon';
+        feature.geometry.coordinates = feature.geometry.coordinates[0];
+    }
+
+    loadParcelData(feature);
+}
+
+function loadParcelData(feature) {
     currentPolygon = feature;
     setbackPolygon = null;
     generatedRooms = [];
     switchMode('2d');
 
-    if (feature.properties) {
-        if (feature.properties.mahalle) document.getElementById('mahalleInput').value = feature.properties.mahalle;
-        if (feature.properties.ada && feature.properties.parsel) {
-            document.getElementById('adaParselInput').value = `${feature.properties.ada} / ${feature.properties.parsel}`;
-        }
-    }
+    const props = feature.properties || {};
+    document.getElementById('mahalleInput').value = props.mahalle || props.MAHALLE || "Merkez Mah.";
+    document.getElementById('adaParselInput').value = (props.ada || props.ADA || "1") + " / " + (props.parsel || props.PARSEL || "1");
 
     const coords = feature.geometry.coordinates[0];
     edgesData = [];
@@ -78,7 +106,7 @@ function loadParcelData(geojson) {
             index: i, start: coords[i], end: coords[i + 1],
             length: turf.distance(p1, p2, { units: 'kilometers' }) * 1000,
             type: i === 0 ? 'yol' : 'komsu',
-            setback: i === 0 ? 3 : 1.5 // Örnek parsel için daha güvenli başlangıç çekmeleri (3m yol, 1.5m komşu)
+            setback: i === 0 ? 3 : 1.5
         });
     }
 
@@ -87,7 +115,8 @@ function loadParcelData(geojson) {
     document.getElementById('calculateBtn').disabled = false;
     document.getElementById('generatePlanBtn').disabled = true;
     document.getElementById('mode3dBtn').disabled = true;
-    document.getElementById('statusText').innerText = "Parsel yüklendi. Çekme hesaplayın.";
+    document.getElementById('statusText').innerText = "Parsel başarıyla yüklendi.";
+    setTimeout(resizeCanvas, 100);
     drawScene2D();
 }
 
@@ -100,8 +129,8 @@ function renderEdgesUI() {
         div.innerHTML = `
             <span><strong>K${idx + 1}</strong><br><small>${edge.length.toFixed(1)}m</small></span>
             <select onchange="updateEdgeType(${idx}, this.value)">
-                <option value="yol" ${edge.type === 'yol' ? 'selected' : ''}>Yol Cephesi</option>
-                <option value="komsu" ${edge.type === 'komsu' ? 'selected' : ''}>Komşu Parsel</option>
+                <option value="yol" ${edge.type === 'yol' ? 'selected' : ''}>Yol (3m)</option>
+                <option value="komsu" ${edge.type === 'komsu' ? 'selected' : ''}>Komşu (1.5m)</option>
                 <option value="bitisik" ${edge.type === 'bitisik' ? 'selected' : ''}>Bitişik (0m)</option>
             </select>
             <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="edgesData[${idx}].setback = parseFloat(this.value)||0">
@@ -124,7 +153,7 @@ function updateImarSummary() {
     document.getElementById('imarOzet').innerText = `Parsel: ${area.toFixed(1)} m² | Max Taban: ${(area * taks).toFixed(1)} m²`;
 }
 
-// Güvenli Çekme ve Oturum Hesaplama
+// Çekme Hesaplama
 document.getElementById('calculateBtn').addEventListener('click', () => {
     if (!currentPolygon) return;
     try {
@@ -162,17 +191,17 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
 
         const tempPolygon = turf.polygon([newGeoCoords]);
         if (turf.area(tempPolygon) <= 0) {
-            alert("Girilen çekme mesafeleri çok büyük, lütfen mesafeleri küçültün!");
+            alert("Çekme mesafeleri parsel için çok büyük!");
             return;
         }
 
         setbackPolygon = tempPolygon;
         updateCoordsTable(newGeoCoords);
         document.getElementById('generatePlanBtn').disabled = false;
-        document.getElementById('statusText').innerText = "Çekme sınırı hazır. Plan üretebilirsiniz.";
+        document.getElementById('statusText').innerText = "Çekme hesaplandı.";
         drawScene2D();
     } catch (e) {
-        alert("Çekme hesaplanırken bir hata oluştu. Lütfen mesafeleri kontrol edin.");
+        alert("Hesaplama hatası! Çekme mesafelerini kontrol edin.");
     }
 });
 
@@ -181,7 +210,7 @@ document.getElementById('generatePlanBtn').addEventListener('click', () => {
     const totalNet = turf.area(setbackPolygon);
     const type = document.getElementById('daireTipiSelect').value;
 
-    document.getElementById('catalogTitle').innerText = `${type} Daire Katalog Özeti`;
+    document.getElementById('catalogTitle').innerText = `${type} Katalog`;
     document.getElementById('catalogParcel').innerText = `${document.getElementById('mahalleInput').value} - ${document.getElementById('adaParselInput').value}`;
 
     if (type === '2+1') {
@@ -209,7 +238,7 @@ document.getElementById('generatePlanBtn').addEventListener('click', () => {
     updateRoomsTable(totalNet);
     document.getElementById('mode3dBtn').disabled = false;
     document.getElementById('downloadImgBtn').disabled = false;
-    document.getElementById('statusText').innerText = "2D Tefrişli Plan ve 3D Maket Hazır!";
+    document.getElementById('statusText').innerText = "Kat Planı Üretildi.";
     switchMode('2d');
 });
 
@@ -255,13 +284,9 @@ function drawScene2D() {
     edgesData.forEach(edge => {
         const p1 = toScreen(edge.start), p2 = toScreen(edge.end);
         ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-        ctx.lineWidth = edge.type === 'yol' ? 5 : 2.5;
+        ctx.lineWidth = edge.type === 'yol' ? 4 : 2;
         ctx.strokeStyle = edge.type === 'yol' ? '#3b82f6' : '#f59e0b';
         ctx.stroke();
-
-        const midX = (p1.x + p2.x) / 2, midY = (p1.y + p2.y) / 2;
-        ctx.fillStyle = "#9ca3af"; ctx.font = "10px sans-serif";
-        ctx.fillText(edge.type === 'yol' ? `YOL (${edge.length.toFixed(1)}m)` : `${edge.length.toFixed(1)}m`, midX - 20, midY - 5);
     });
 
     if (setbackPolygon) {
@@ -272,9 +297,9 @@ function drawScene2D() {
         ctx.beginPath();
         screenPts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
         ctx.closePath();
-        ctx.fillStyle = "rgba(16, 185, 129, 0.15)";
+        ctx.fillStyle = "rgba(16, 185, 129, 0.2)";
         ctx.fill();
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.strokeStyle = "#10b981";
         ctx.stroke();
 
@@ -284,56 +309,31 @@ function drawScene2D() {
             const maxX = Math.max(...screenPts.map(p => p.x));
             const minY = Math.min(...screenPts.map(p => p.y));
             const maxY = Math.max(...screenPts.map(p => p.y));
-            const w = maxX - minX;
-            const h = maxY - minY;
+            const w = maxX - minX, h = maxY - minY;
 
             generatedRooms.forEach(room => {
-                const x = minX + room.rx * w;
-                const y = minY + room.ry * h;
-                const rw = room.rw * w;
-                const rh = room.rh * h;
+                const x = minX + room.rx * w, y = minY + room.ry * h;
+                const rw = room.rw * w, rh = room.rh * h;
 
                 ctx.fillStyle = room.color;
                 ctx.fillRect(x, y, rw, rh);
                 ctx.strokeStyle = "#111827";
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 2;
                 ctx.strokeRect(x, y, rw, rh);
-
-                drawFurnitureIcon(ctx, room.furniture, x, y, rw, rh);
 
                 const cx = x + rw / 2, cy = y + rh / 2;
                 ctx.fillStyle = "#ffffff";
-                ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = "#111827"; ctx.lineWidth = 1; ctx.stroke();
+                ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#111827"; ctx.stroke();
 
                 ctx.fillStyle = "#111827";
-                ctx.font = "bold 10px sans-serif";
+                ctx.font = "bold 9px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText(room.id, cx, cy + 3.5);
+                ctx.fillText(room.id, cx, cy + 3);
                 ctx.textAlign = "left";
             });
         }
         ctx.restore();
-    }
-}
-
-function drawFurnitureIcon(ctx, type, x, y, w, h) {
-    ctx.fillStyle = "rgba(30, 41, 59, 0.35)";
-    if (type === "bed" || type === "singlebed") {
-        const bw = Math.min(w * 0.55, 42), bh = Math.min(h * 0.55, 48);
-        ctx.fillRect(x + 8, y + 8, bw, bh);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x + 11, y + 10, bw - 6, 8);
-    } else if (type === "sofa") {
-        ctx.fillRect(x + 8, y + h * 0.3, 14, h * 0.45);
-        ctx.fillRect(x + 8, y + h * 0.65, w * 0.45, 14);
-        ctx.fillRect(x + 30, y + h * 0.42, 18, 12);
-    } else if (type === "kitchen") {
-        ctx.fillRect(x + w - 14, y + 4, 10, h - 8);
-    } else if (type === "bath") {
-        ctx.strokeStyle = "rgba(30, 41, 59, 0.5)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 4, y + 4, w * 0.45, h * 0.45);
     }
 }
 
@@ -358,8 +358,7 @@ function switchMode(mode) {
 
 function build3DIsometricModel() {
     threeContainer.innerHTML = '';
-    const w = threeContainer.clientWidth;
-    const h = threeContainer.clientHeight;
+    const w = threeContainer.clientWidth, h = threeContainer.clientHeight;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf1f5f9);
@@ -369,73 +368,30 @@ function build3DIsometricModel() {
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(w, h);
-    renderer.shadowMap.enabled = true;
     threeContainer.appendChild(renderer.domElement);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.75);
     dirLight.position.set(10, 20, 10);
-    dirLight.castShadow = true;
     scene.add(dirLight);
-
-    const baseGeo = new THREE.BoxGeometry(16, 0.2, 14);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0 });
-    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-    baseMesh.position.y = -0.1;
-    scene.add(baseMesh);
 
     const planW = 11, planD = 9;
     const startX = -planW / 2, startZ = -planD / 2;
 
     generatedRooms.forEach(room => {
-        const rw = room.rw * planW;
-        const rd = room.rh * planD;
+        const rw = room.rw * planW, rd = room.rh * planD;
         const cx = startX + room.rx * planW + rw / 2;
         const cz = startZ + room.ry * planD + rd / 2;
 
-        const floorGeo = new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1);
-        const floorMat = new THREE.MeshStandardMaterial({ color: room.color });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
+        const floor = new THREE.Mesh(
+            new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1),
+            new THREE.MeshStandardMaterial({ color: room.color })
+        );
         floor.position.set(cx, 0.08, cz);
         scene.add(floor);
-
-        const wallH = 1.6;
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-
-        const w1 = new THREE.Mesh(new THREE.BoxGeometry(rw, wallH, 0.12), wallMat);
-        w1.position.set(cx, wallH / 2, cz - rd / 2);
-        scene.add(w1);
-
-        const w2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, wallH, rd), wallMat);
-        w2.position.set(cx - rw / 2, wallH / 2, cz);
-        scene.add(w2);
-
-        if (room.furniture === 'bed' || room.furniture === 'singlebed') {
-            const bed = new THREE.Mesh(
-                new THREE.BoxGeometry(rw * 0.5, 0.45, rd * 0.55),
-                new THREE.MeshStandardMaterial({ color: 0x8b5cf6 })
-            );
-            bed.position.set(cx, 0.35, cz);
-            scene.add(bed);
-        } else if (room.furniture === 'sofa') {
-            const sofa = new THREE.Mesh(
-                new THREE.BoxGeometry(rw * 0.55, 0.5, rd * 0.35),
-                new THREE.MeshStandardMaterial({ color: 0x475569 })
-            );
-            sofa.position.set(cx, 0.35, cz);
-            scene.add(sofa);
-        } else if (room.furniture === 'kitchen') {
-            const counter = new THREE.Mesh(
-                new THREE.BoxGeometry(rw * 0.7, 0.8, 0.5),
-                new THREE.MeshStandardMaterial({ color: 0x1e293b })
-            );
-            counter.position.set(cx, 0.45, cz - rd * 0.3);
-            scene.add(counter);
-        }
     });
 
     function animate() {
@@ -449,7 +405,7 @@ function build3DIsometricModel() {
 
 document.getElementById('downloadImgBtn').addEventListener('click', () => {
     const link = document.createElement('a');
-    link.download = `TOCO_Kat_Plani_${document.getElementById('adaParselInput').value.replace(/\s+/g, '')}.png`;
+    link.download = `TOCO_Plan.png`;
     link.href = activeMode === '2d' ? canvas.toDataURL("image/png") : renderer.domElement.toDataURL("image/png");
     link.click();
 });
@@ -459,6 +415,6 @@ document.getElementById('exportJsonBtn').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(setbackPolygon, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = "cekme_sonrasi_koordinatlar.geojson";
+    a.download = "koordinatlar.geojson";
     a.click();
 });
