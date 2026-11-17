@@ -2,8 +2,8 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TOCO MİMARİ ETÜT & 3D MAKET v0.3</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOCO MİMARİ ETÜT v0.3</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -15,10 +15,9 @@
         <aside class="sidebar">
             <div class="brand-header">
                 <h1>TOCO MİMARİ ETÜT</h1>
-                <span class="version">v0.3 - 2D Tefriş & 3D İzometrik Motor</span>
+                <span class="version">v0.3 - Kat Planı & 3D Motor</span>
             </div>
 
-            <!-- 1. Parsel -->
             <section class="panel-box">
                 <h2>1. Parsel Verisi (TKGM)</h2>
                 <div class="file-upload">
@@ -38,7 +37,6 @@
                 </div>
             </section>
 
-            <!-- 2. İmar -->
             <section class="panel-box">
                 <h2>2. Belediye İmar Durumu</h2>
                 <div class="grid-3">
@@ -58,7 +56,6 @@
                 <div class="summary-strip" id="imarOzet">Parsel: 0 m²</div>
             </section>
 
-            <!-- 3. Cephe ve Çekme -->
             <section class="panel-box">
                 <h2>3. Cephe & Çekme Payları</h2>
                 <div id="edgesList" class="edges-list">
@@ -67,42 +64,40 @@
                 <button id="calculateBtn" class="btn btn-accent full-width" disabled>Çekme Sınırını Hesapla</button>
             </section>
 
-            <!-- 4. Kat Planı & 3D Üretici -->
             <section class="panel-box highlight-box">
                 <h2>4. Mimari Plan & 3D Maket</h2>
                 <div class="input-group">
-                    <label>Daire Tipi Seçimi</label>
+                    <label>Daire Tipi</label>
                     <select id="daireTipiSelect">
-                        <option value="2+1">2+1 Daire (Tefrişli Plan)</option>
-                        <option value="3+1">3+1 Daire (Tefrişli Plan)</option>
+                        <option value="2+1">2+1 Daire Planı</option>
+                        <option value="3+1">3+1 Daire Planı</option>
                     </select>
                 </div>
-                <button id="generatePlanBtn" class="btn btn-primary full-width" disabled>Kat Planını ve 3D Maketi Üret</button>
+                <button id="generatePlanBtn" class="btn btn-primary full-width" disabled>Kat Planı ve 3D Üret</button>
             </section>
         </aside>
 
-        <!-- Orta Çizim & 3D Alanı -->
+        <!-- Orta Çizim & 3D Alanı (Sabit Yükseklik Garantili) -->
         <main class="canvas-area">
             <div class="canvas-toolbar">
                 <div class="view-switcher">
-                    <button id="mode2dBtn" class="mode-btn active">2D Vaziyet & Kat Planı</button>
-                    <button id="mode3dBtn" class="mode-btn" disabled>3D İzometrik Maket</button>
+                    <button id="mode2dBtn" class="mode-btn active">2D Plan</button>
+                    <button id="mode3dBtn" class="mode-btn" disabled>3D Maket</button>
                 </div>
                 <span id="statusText" class="status-badge">Parsel bekleniyor</span>
             </div>
-            <div class="canvas-wrapper" id="canvasContainer" style="width: 100%; height: 450px; position: relative;">
-    <canvas id="planCanvas" style="width: 100%; height: 100%; display: block;"></canvas>
-    <div id="threeContainer" style="display:none; width:100%; height:100%; position: absolute; top:0; left:0;"></div>
-</div>
+            <div class="canvas-wrapper" id="canvasContainer">
+                <canvas id="planCanvas"></canvas>
+                <div id="threeContainer" style="display:none;"></div>
             </div>
         </main>
 
-        <!-- Sağ Katalog & Koordinat Paneli -->
+        <!-- Sağ Katalog Paneli -->
         <aside class="right-panel">
             <section class="panel-box catalog-card">
                 <div class="catalog-header">
-                    <span id="catalogTitle">2+1 Daire Katalog Özeti</span>
-                    <small id="catalogParcel">Ada/Parsel: -</small>
+                    <span id="catalogTitle">Katalog Özeti</span>
+                    <small id="catalogParcel">-</small>
                 </div>
                 <div class="table-container">
                     <table id="roomsTable">
@@ -118,12 +113,32 @@
                     </table>
                 </div>
                 <div class="area-summary">
-                    <div><span>Net Alan:</span> <strong id="netAlanTxt">0 m²</strong></div>
-                    <div><span>Brüt Alan:</span> <strong id="brutAlanTxt">0 m²</strong></div>
+                    <div><span>Net:</span> <strong id="netAlanTxt">0 m²</strong></div>
+                    <div><span>Brüt:</span> <strong id="brutAlanTxt">0 m²</strong></div>
                 </div>
-                <button id="downloadImgBtn" class="btn btn-primary full-width" style="margin-top:8px;" disabled>Katalog Görselini İndir (PNG)</button>
+                <button id="downloadImgBtn" class="btn btn-primary full-width" style="margin-top:8px;" disabled>Görseli İndir (PNG)</button>
             </section>
 
             <section class="panel-box">
-                <h2>Çekme Sonrası Köşe Koordinatları</h2>
-                <div class="table-container
+                <h2>Köşe Koordinatları</h2>
+                <div class="table-container small-table">
+                    <table id="coordsTable">
+                        <thead>
+                            <tr>
+                                <th>Nokta</th>
+                                <th>X</th>
+                                <th>Y</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="3" class="empty-msg">Bekleniyor</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <button id="exportJsonBtn" class="btn btn-secondary full-width" disabled>Koordinatları İndir</button>
+            </section>
+        </aside>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
