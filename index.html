@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOCO MİMARİ ETÜT v0.3</title>
+    <title>TOCO MİMARİ ETÜT v0.3 - Manuel</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -15,17 +15,12 @@
         <aside class="sidebar">
             <div class="brand-header">
                 <h1>TOCO MİMARİ ETÜT</h1>
-                <span class="version">v0.3 - Kat Planı & 3D Motor</span>
+                <span class="version">v0.3 - Manuel Parsel & 3D Motor</span>
             </div>
 
             <section class="panel-box">
-                <h2>1. Parsel Verisi (TKGM)</h2>
-                <div class="file-upload">
-                    <label for="geojsonInput" class="btn btn-primary">GeoJSON Yükle</label>
-                    <input type="file" id="geojsonInput" accept=".json,.geojson" hidden>
-                    <button id="loadSampleBtn" class="btn btn-secondary">Örnek Parsel</button>
-                </div>
-                <div class="grid-2">
+                <h2>1. Parsel & Tapu Bilgileri</h2>
+                <div class="grid-2" style="margin-bottom: 8px;">
                     <div class="input-group">
                         <label>İlçe / Mahalle</label>
                         <input type="text" id="mahalleInput" value="Şarköy Mah.">
@@ -35,6 +30,7 @@
                         <input type="text" id="adaParselInput" value="142 / 8">
                     </div>
                 </div>
+                <button id="loadDefaultManual" class="btn btn-secondary full-width">Varsayılan 4gen Parsel Yükle</button>
             </section>
 
             <section class="panel-box">
@@ -53,15 +49,18 @@
                         <input type="number" id="katInput" value="2">
                     </div>
                 </div>
-                <div class="summary-strip" id="imarOzet">Parsel: 0 m²</div>
+                <div class="summary-strip" id="imarOzet">Parsel Alanı: 0 m²</div>
             </section>
 
             <section class="panel-box">
-                <h2>3. Cephe & Çekme Payları</h2>
+                <h2>3. Manuel Kenar & Çekme Payları (Metre)</h2>
                 <div id="edgesList" class="edges-list">
-                    <div class="empty-msg">Önce parsel yükleyin.</div>
+                    <div class="empty-msg">Kenar verisi yok.</div>
                 </div>
-                <button id="calculateBtn" class="btn btn-accent full-width" disabled>Çekme Sınırını Hesapla</button>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                    <button id="addEdgeBtn" class="btn btn-secondary">+ Kenar Ekle</button>
+                    <button id="calculateBtn" class="btn btn-accent" style="flex:2;">Çekme Sınırını Hesapla</button>
+                </div>
             </section>
 
             <section class="panel-box highlight-box">
@@ -77,14 +76,14 @@
             </section>
         </aside>
 
-        <!-- Orta Çizim & 3D Alanı (Sabit Yükseklik Garantili) -->
+        <!-- Orta Çizim Alanı -->
         <main class="canvas-area">
             <div class="canvas-toolbar">
                 <div class="view-switcher">
                     <button id="mode2dBtn" class="mode-btn active">2D Plan</button>
                     <button id="mode3dBtn" class="mode-btn" disabled>3D Maket</button>
                 </div>
-                <span id="statusText" class="status-badge">Parsel bekleniyor</span>
+                <span id="statusText" class="status-badge">Kenar ölçülerini girin</span>
             </div>
             <div class="canvas-wrapper" id="canvasContainer">
                 <canvas id="planCanvas"></canvas>
@@ -126,8 +125,8 @@
                         <thead>
                             <tr>
                                 <th>Nokta</th>
-                                <th>X</th>
-                                <th>Y</th>
+                                <th>X (m)</th>
+                                <th>Y (m)</th>
                             </tr>
                         </thead>
                         <tbody>
