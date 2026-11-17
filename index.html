@@ -2,174 +2,221 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TOCO MİMARİ ETÜT v0.3</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PATRON - Mimari Etüt & Katalog</title>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         :root {
-            --primary: #721c24;
+            --primary: #721c24; /* TOCO Vişne Kırmızı */
             --primary-dark: #4a1016;
-            --bg-dark: #14161a;
-            --panel-bg: #1e2128;
-            --border: #2e333d;
+            --bg-dark: #0f1115;
+            --panel-bg: #1a1d24;
+            --border: #2a2e39;
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
             --accent: #10b981;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; }
-        .app-container { display: grid; grid-template-columns: 320px 1fr 300px; height: 100vh; }
-        @media (max-width: 960px) {
-            .app-container { display: flex; flex-direction: column; height: auto; overflow-y: auto; }
-            .canvas-area { height: 400px; min-height: 400px; order: -1; }
-            .sidebar, .right-panel { width: 100%; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); padding-bottom: 40px; }
+        
+        .mobile-header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            padding: 16px;
+            text-align: center;
+            border-bottom: 2px solid #a72834;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
-        .sidebar, .right-panel { background-color: var(--panel-bg); border-right: 1px solid var(--border); padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .right-panel { border-right: none; border-left: 1px solid var(--border); }
-        .brand-header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); padding: 10px; border-radius: 6px; text-align: center; }
-        .brand-header h1 { font-size: 15px; }
-        .brand-header .version { font-size: 10px; color: #f8d7da; }
-        .panel-box { background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
-        .highlight-box { border-color: var(--primary); background: rgba(114, 28, 36, 0.1); }
-        .panel-box h2 { font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-        .btn { padding: 8px 10px; border: none; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; }
-        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .btn-primary { background: var(--primary); color: white; flex: 1; }
-        .btn-secondary { background: #323642; color: white; flex: 1; }
-        .btn-accent { background: var(--accent); color: #052e16; }
-        .full-width { width: 100%; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
-        .input-group label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
-        .input-group input, .input-group select { width: 100%; background: var(--bg-dark); border: 1px solid var(--border); color: white; padding: 6px; border-radius: 4px; font-size: 11px; }
-        .summary-strip { margin-top: 6px; padding: 6px; background: rgba(114, 28, 36, 0.25); border-radius: 4px; font-size: 11px; text-align: center; }
-        .edges-list { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; }
-        .canvas-area { display: flex; flex-direction: column; background: #101216; position: relative; }
-        .canvas-toolbar { height: 40px; background: var(--panel-bg); border-bottom: 1px solid var(--border); padding: 0 10px; display: flex; justify-content: space-between; align-items: center; }
-        .view-switcher { display: flex; gap: 4px; }
-        .mode-btn { background: #2b303b; color: #d1d5db; border: 1px solid var(--border); padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; }
+        .mobile-header h1 { font-size: 16px; letter-spacing: 1px; color: white; }
+        .mobile-header span { font-size: 11px; color: #f8d7da; }
+
+        .app-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .card h2 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 4px;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+        .input-group label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+        .input-group input, .input-group select {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .btn {
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+        }
+        .btn-primary { background: var(--primary); color: white; width: 100%; }
+        .btn-secondary { background: #323642; color: white; width: 100%; }
+        .btn-accent { background: var(--accent); color: #052e16; width: 100%; margin-top: 6px; }
+
+        .canvas-box {
+            width: 100%;
+            height: 360px;
+            background: #101216;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        canvas { width: 100%; height: 100%; display: block; }
+        #threeContainer { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; }
+
+        .view-switch {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .mode-btn {
+            flex: 1;
+            background: #2b303b;
+            color: #d1d5db;
+            border: 1px solid var(--border);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
         .mode-btn.active { background: var(--primary); color: white; }
-        .status-badge { font-size: 11px; color: var(--accent); }
-        .canvas-wrapper { flex: 1; position: relative; width: 100%; height: 100%; min-height: 350px; }
-        canvas { width: 100% !important; height: 100% !important; display: block; }
-        .table-container { max-height: 160px; overflow-y: auto; margin-bottom: 6px; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        th, td { padding: 5px; border-bottom: 1px solid var(--border); text-align: left; }
-        th { color: var(--text-muted); font-size: 10px; }
-        .empty-msg { color: var(--text-muted); font-size: 11px; text-align: center; padding: 8px; }
-        .area-summary { background: rgba(16, 185, 129, 0.12); border: 1px solid var(--accent); padding: 6px; border-radius: 5px; font-size: 11px; display: flex; justify-content: space-between; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
+        th, td { padding: 6px; border-bottom: 1px solid var(--border); text-align: left; }
+        th { color: var(--text-muted); }
+        .summary-box {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--accent);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+        }
+        .edge-row {
+            display: grid;
+            grid-template-columns: 40px 1fr 1.2fr 45px 30px;
+            gap: 4px;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
+
+    <header class="mobile-header">
+        <h1>TOCO MİMARİ ETÜT</h1>
+        <span>Mobil Prototip v0.3</span>
+    </header>
+
     <div class="app-container">
-        <aside class="sidebar">
-            <div class="brand-header">
-                <h1>TOCO MİMARİ ETÜT</h1>
-                <span class="version">v0.3 - Manuel Ölçü & 3D Motor</span>
+        <!-- 1. Parsel & Ölçü Paneli -->
+        <div class="card">
+            <h2>1. Parsel & Kenar Ölçüleri (Manuel)</h2>
+            <div class="grid-2" style="margin-bottom: 8px;">
+                <div class="input-group">
+                    <label>Mahalle</label>
+                    <input type="text" id="mahalleInput" value="Şarköy Mah.">
+                </div>
+                <div class="input-group">
+                    <label>Ada / Parsel</label>
+                    <input type="text" id="adaParselInput" value="142 / 8">
+                </div>
             </div>
-
-            <section class="panel-box">
-                <h2>1. Parsel Bilgileri</h2>
-                <div class="grid-2" style="margin-bottom: 6px;">
-                    <div class="input-group">
-                        <label>İlçe / Mahalle</label>
-                        <input type="text" id="mahalleInput" value="Şarköy Mah.">
-                    </div>
-                    <div class="input-group">
-                        <label>Ada / Parsel</label>
-                        <input type="text" id="adaParselInput" value="142 / 8">
-                    </div>
-                </div>
-                <button id="loadDefaultManual" class="btn btn-secondary full-width">Varsayılan 4gen Parsel Yükle</button>
-            </section>
-
-            <section class="panel-box">
-                <h2>2. Belediye İmar Durumu</h2>
-                <div class="grid-3">
-                    <div class="input-group">
-                        <label>TAKS</label>
-                        <input type="number" id="taksInput" step="0.05" value="0.40">
-                    </div>
-                    <div class="input-group">
-                        <label>KAKS</label>
-                        <input type="number" id="kaksInput" step="0.10" value="0.80">
-                    </div>
-                    <div class="input-group">
-                        <label>Kat</label>
-                        <input type="number" id="katInput" value="2">
-                    </div>
-                </div>
-                <div class="summary-strip" id="imarOzet">Parsel Alanı: 0 m²</div>
-            </section>
-
-            <section class="panel-box">
-                <h2>3. Manuel Kenar & Çekme Payları (m)</h2>
-                <div id="edgesList" class="edges-list"></div>
-                <div style="display: flex; gap: 6px; margin-top: 6px;">
-                    <button id="addEdgeBtn" class="btn btn-secondary">+ Kenar</button>
-                    <button id="calculateBtn" class="btn btn-accent" style="flex:2;">Çekme Sınırını Hesapla</button>
-                </div>
-            </section>
-
-            <section class="panel-box highlight-box">
-                <h2>4. Mimari Plan & 3D Maket</h2>
-                <div class="input-group" style="margin-bottom:6px;">
-                    <label>Daire Tipi</label>
-                    <select id="daireTipiSelect">
-                        <option value="2+1">2+1 Daire Planı</option>
-                        <option value="3+1">3+1 Daire Planı</option>
-                    </select>
-                </div>
-                <button id="generatePlanBtn" class="btn btn-primary full-width" disabled>Kat Planı ve 3D Üret</button>
-            </section>
-        </aside>
-
-        <main class="canvas-area">
-            <div class="canvas-toolbar">
-                <div class="view-switcher">
-                    <button id="mode2dBtn" class="mode-btn active">2D Plan</button>
-                    <button id="mode3dBtn" class="mode-btn" disabled>3D Maket</button>
-                </div>
-                <span id="statusText" class="status-badge">Ölçüleri girin</span>
+            <div id="edgesList"></div>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+                <button id="addEdgeBtn" class="btn btn-secondary">+ Kenar Ekle</button>
+                <button id="calculateBtn" class="btn btn-accent" style="flex:2;">Çekme Sınırını Hesapla</button>
             </div>
-            <div class="canvas-wrapper" id="canvasContainer">
+        </div>
+
+        <!-- 2. İmar & Plan Üretici -->
+        <div class="card">
+            <h2>2. İmar & Mimari Plan</h2>
+            <div class="grid-3" style="margin-bottom: 8px;">
+                <div class="input-group">
+                    <label>TAKS</label>
+                    <input type="number" id="taksInput" step="0.05" value="0.40">
+                </div>
+                <div class="input-group">
+                    <label>KAKS</label>
+                    <input type="number" id="kaksInput" step="0.10" value="0.80">
+                </div>
+                <div class="input-group">
+                    <label>Kat</label>
+                    <input type="number" id="katInput" value="2">
+                </div>
+            </div>
+            <div class="input-group" style="margin-bottom: 8px;">
+                <label>Daire Konsepti</label>
+                <select id="daireTipiSelect">
+                    <option value="2+1">2+1 Daire Yerleşimi</option>
+                    <option value="3+1">3+1 Daire Yerleşimi</option>
+                </select>
+            </div>
+            <button id="generatePlanBtn" class="btn btn-primary" disabled>Kat Planı ve 3D Üret</button>
+        </div>
+
+        <!-- 3. Görselleştirme (2D / 3D) -->
+        <div class="card">
+            <div class="view-switch">
+                <button id="mode2dBtn" class="mode-btn active">2D Kat Planı</button>
+                <button id="mode3dBtn" class="mode-btn" disabled>3D İzometrik Maket</button>
+            </div>
+            <div class="canvas-box" id="canvasContainer">
                 <canvas id="planCanvas"></canvas>
-                <div id="threeContainer" style="display:none; width:100%; height:100%; position:absolute; top:0; left:0;"></div>
+                <div id="threeContainer"></div>
             </div>
-        </main>
+        </div>
 
-        <aside class="right-panel">
-            <section class="panel-box catalog-card">
-                <div class="catalog-header" style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#f8d7da; margin-bottom:6px;">
-                    <span id="catalogTitle">Katalog Özeti</span>
-                    <small id="catalogParcel">-</small>
-                </div>
-                <div class="table-container">
-                    <table id="roomsTable">
-                        <thead><tr><th>Mahal</th><th>Net m²</th></tr></thead>
-                        <tbody><tr><td colspan="2" class="empty-msg">Plan üretilmedi</td></tr></tbody>
-                    </table>
-                </div>
-                <div class="area-summary">
-                    <div><span>Net:</span> <strong id="netAlanTxt">0 m²</strong></div>
-                    <div><span>Brüt:</span> <strong id="brutAlanTxt">0 m²</strong></div>
-                </div>
-                <button id="downloadImgBtn" class="btn btn-primary full-width" style="margin-top:6px;" disabled>Görseli İndir (PNG)</button>
-            </section>
-
-            <section class="panel-box">
-                <h2>Köşe Koordinatları</h2>
-                <div class="table-container small-table">
-                    <table id="coordsTable">
-                        <thead><tr><th>No</th><th>X (m)</th><th>Y (m)</th></tr></thead>
-                        <tbody><tr><td colspan="3" class="empty-msg">Bekleniyor</td></tr></tbody>
-                    </table>
-                </div>
-                <button id="exportJsonBtn" class="btn btn-secondary full-width" disabled>Koordinatları İndir</button>
-            </section>
-        </aside>
+        <!-- 4. Katalog Özeti -->
+        <div class="card">
+            <h2>Oda Dağılımı & Net/Brüt</h2>
+            <table>
+                <thead><tr><th>Mahal</th><th>Alan</th></tr></thead>
+                <tbody id="roomsTableBody">
+                    <tr><td colspan="2" style="text-align:center; color:var(--text-muted);">Henüz plan üretilmedi</td></tr>
+                </tbody>
+            </table>
+            <div class="summary-box">
+                <span>Net: <strong id="netAlanTxt">0 m²</strong></span>
+                <span>Brüt (%15): <strong id="brutAlanTxt">0 m²</strong></span>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -192,78 +239,62 @@
 
         function resizeCanvas() {
             const parent = document.getElementById('canvasContainer');
-            const w = parent ? parent.clientWidth : 400;
-            const h = parent ? parent.clientHeight : 400;
-            canvas.width = w;
-            canvas.height = h;
+            canvas.width = parent.clientWidth;
+            canvas.height = parent.clientHeight;
             if (renderer && camera) {
-                camera.aspect = w / h;
+                camera.aspect = parent.clientWidth / parent.clientHeight;
                 camera.updateProjectionMatrix();
-                renderer.setSize(w, h);
+                renderer.setSize(parent.clientWidth, parent.clientHeight);
             }
             if (activeMode === '2d') drawScene2D();
         }
         window.addEventListener('resize', resizeCanvas);
-        setTimeout(resizeCanvas, 150);
-
-        document.getElementById('loadDefaultManual').addEventListener('click', () => {
-            manualEdges = [
-                { length: 16, type: 'yol', setback: 3 },
-                { length: 14, type: 'komsu', setback: 1.5 },
-                { length: 16, type: 'komsu', setback: 1.5 },
-                { length: 14, type: 'bitisik', setback: 0 }
-            ];
-            initManualParcel();
-        });
-
-        document.getElementById('addEdgeBtn').addEventListener('click', () => {
-            manualEdges.push({ length: 10, type: 'komsu', setback: 1.5 });
-            initManualParcel();
-        });
-
-        function initManualParcel() {
-            renderEdgesUI();
-            buildPolygonFromEdges();
-        }
-        initManualParcel();
+        setTimeout(resizeCanvas, 100);
 
         function renderEdgesUI() {
             const container = document.getElementById('edgesList');
             container.innerHTML = '';
             manualEdges.forEach((edge, idx) => {
                 const div = document.createElement('div');
-                div.style.cssText = "display:grid; grid-template-columns: 35px 1fr 1fr 40px 25px; gap:4px; align-items:center; margin-bottom:4px; font-size:11px;";
+                div.className = 'edge-row';
                 div.innerHTML = `
                     <span><strong>K${idx + 1}</strong></span>
-                    <input type="number" step="0.5" min="1" value="${edge.length}" onchange="updateEdgeVal(${idx}, 'length', this.value)" style="background:#14161a; border:1px solid #2e333d; color:white; padding:4px; border-radius:3px;">
-                    <select onchange="updateEdgeVal(${idx}, 'type', this.value)" style="background:#14161a; border:1px solid #2e333d; color:white; padding:4px; border-radius:3px; font-size:10px;">
+                    <input type="number" step="0.5" min="1" value="${edge.length}" onchange="updateEdge(${idx}, 'length', this.value)">
+                    <select onchange="updateEdge(${idx}, 'type', this.value)">
                         <option value="yol" ${edge.type === 'yol' ? 'selected' : ''}>Yol(3m)</option>
-                        <option value="komsu" ${edge.type === 'komsu' ? 'selected' : ''}>Komşu(1.5m)</option>
+                        <option value="komsu" ${edge.type === 'komsu' ? 'selected' : ''}>Komşu(1.5)</option>
                         <option value="bitisik" ${edge.type === 'bitisik' ? 'selected' : ''}>Bitişik(0)</option>
                     </select>
-                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="updateEdgeVal(${idx}, 'setback', this.value)" style="background:#14161a; border:1px solid #2e333d; color:white; padding:4px; border-radius:3px;">
-                    <button onclick="removeEdge(${idx})" style="background:#721c24; color:white; border:none; border-radius:3px; cursor:pointer;">×</button>
+                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="updateEdge(${idx}, 'setback', this.value)">
+                    <button onclick="removeEdge(${idx})" style="background:#721c24; color:white; border:none; border-radius:4px; height:26px; cursor:pointer;">×</button>
                 `;
                 container.appendChild(div);
             });
         }
 
-        window.updateEdgeVal = (idx, field, val) => {
+        window.updateEdge = (idx, field, val) => {
             manualEdges[idx][field] = field === 'type' ? val : (parseFloat(val) || 0);
             if (field === 'type') {
                 manualEdges[idx].setback = val === 'yol' ? 3 : (val === 'komsu' ? 1.5 : 0);
                 renderEdgesUI();
             }
-            buildPolygonFromEdges();
+            buildPolygon();
         };
 
         window.removeEdge = (idx) => {
             if (manualEdges.length <= 3) { alert("En az 3 kenar olmalı!"); return; }
             manualEdges.splice(idx, 1);
-            initManualParcel();
+            renderEdgesUI();
+            buildPolygon();
         };
 
-        function buildPolygonFromEdges() {
+        document.getElementById('addEdgeBtn').addEventListener('click', () => {
+            manualEdges.push({ length: 10, type: 'komsu', setback: 1.5 });
+            renderEdgesUI();
+            buildPolygon();
+        });
+
+        function buildPolygon() {
             try {
                 let pts = [[0, 0]];
                 let x = 0, y = 0;
@@ -277,18 +308,12 @@
                 }
                 pts[pts.length - 1] = pts[0];
                 currentPolygon = turf.polygon([pts]);
-                updateImarSummary();
-                document.getElementById('statusText').innerText = "Parsel hazır.";
-                resizeCanvas();
+                drawScene2D();
             } catch (e) { console.error(e); }
         }
 
-        function updateImarSummary() {
-            if (!currentPolygon) return;
-            const area = turf.area(currentPolygon);
-            const taks = parseFloat(document.getElementById('taksInput').value) || 0.4;
-            document.getElementById('imarOzet').innerText = `Parsel Alanı: ${area.toFixed(1)} m² | Max Taban: ${(area * taks).toFixed(1)} m²`;
-        }
+        renderEdgesUI();
+        buildPolygon();
 
         document.getElementById('calculateBtn').addEventListener('click', () => {
             if (!currentPolygon) return;
@@ -313,20 +338,16 @@
                 newPts.push(newPts[0]);
 
                 setbackPolygon = turf.polygon([newPts]);
-                updateCoordsTable(newPts);
                 document.getElementById('generatePlanBtn').disabled = false;
-                document.getElementById('statusText').innerText = "Çekme Sınırı Hesaplandı.";
+                alert("Çekme sınırı başarıyla hesaplandı!");
                 drawScene2D();
-            } catch (e) { alert("Çekme mesafeleri çok büyük!"); }
+            } catch (e) { alert("Çekme mesafeleri parsel için çok büyük!"); }
         });
 
         document.getElementById('generatePlanBtn').addEventListener('click', () => {
             if (!setbackPolygon) return;
             const totalNet = turf.area(setbackPolygon);
             const type = document.getElementById('daireTipiSelect').value;
-
-            document.getElementById('catalogTitle').innerText = `${type} Katalog`;
-            document.getElementById('catalogParcel').innerText = `${document.getElementById('mahalleInput').value} - ${document.getElementById('adaParselInput').value}`;
 
             generatedRooms = type === '2+1' ? [
                 { id: 1, name: "Salon", area: totalNet * 0.32, color: "#e8dcc8", rx: 0, ry: 0.35, rw: 0.55, rh: 0.65 },
@@ -346,38 +367,24 @@
                 { id: 7, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.50, ry: 0.22, rw: 0.25, rh: 0.28 }
             ];
 
-            updateRoomsTable(totalNet);
-            document.getElementById('mode3dBtn').disabled = false;
-            document.getElementById('downloadImgBtn').disabled = false;
-            document.getElementById('statusText').innerText = "Plan Üretildi!";
-            switchMode('2d');
-        });
-
-        function updateRoomsTable(totalNet) {
-            const tbody = document.querySelector('#roomsTable tbody');
+            const tbody = document.getElementById('roomsTableBody');
             tbody.innerHTML = '';
             generatedRooms.forEach(room => {
                 tbody.innerHTML += `<tr><td><strong>${room.id}.</strong> ${room.name}</td><td>${room.area.toFixed(2)} m²</td></tr>`;
             });
             document.getElementById('netAlanTxt').innerText = `${totalNet.toFixed(2)} m²`;
             document.getElementById('brutAlanTxt').innerText = `${(totalNet * 1.15).toFixed(2)} m²`;
-        }
 
-        function updateCoordsTable(coords) {
-            const tbody = document.querySelector('#coordsTable tbody');
-            tbody.innerHTML = '';
-            for (let i = 0; i < coords.length - 1; i++) {
-                tbody.innerHTML += `<tr><td>B${i + 1}</td><td>${coords[i][0].toFixed(2)}</td><td>${coords[i][1].toFixed(2)}</td></tr>`;
-            }
-            document.getElementById('exportJsonBtn').disabled = false;
-        }
+            document.getElementById('mode3dBtn').disabled = false;
+            switchMode('2d');
+        });
 
         function drawScene2D() {
             if (!currentPolygon) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             const bbox = turf.bbox(currentPolygon);
-            const padding = 35;
+            const padding = 30;
             const spanX = (bbox[2] - bbox[0]) || 1;
             const spanY = (bbox[3] - bbox[1]) || 1;
             const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
@@ -454,12 +461,12 @@
         function build3DIsometricModel() {
             if (typeof THREE === 'undefined') return;
             threeContainer.innerHTML = '';
-            const w = threeContainer.clientWidth || 350, h = threeContainer.clientHeight || 400;
+            const w = threeContainer.clientWidth, h = threeContainer.clientHeight;
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf1f5f9);
             camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
-            camera.position.set(14, 16, 14);
+            camera.position.set(12, 14, 12);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(w, h);
@@ -471,7 +478,7 @@
             dirLight.position.set(10, 20, 10);
             scene.add(dirLight);
 
-            const planW = 11, planD = 9, startX = -planW / 2, startZ = -planD / 2;
+            const planW = 10, planD = 8, startX = -planW / 2, startZ = -planD / 2;
             generatedRooms.forEach(room => {
                 const rw = room.rw * planW, rd = room.rh * planD;
                 const cx = startX + room.rx * planW + rw / 2, cz = startZ + room.ry * planD + rd / 2;
@@ -488,20 +495,6 @@
             }
             animate();
         }
-
-        document.getElementById('downloadImgBtn').addEventListener('click', () => {
-            const link = document.createElement('a');
-            link.download = `TOCO_Plan.png`;
-            link.href = activeMode === '2d' ? canvas.toDataURL("image/png") : renderer.domElement.toDataURL("image/png");
-            link.click();
-        });
-
-        document.getElementById('exportJsonBtn').addEventListener('click', () => {
-            if (!setbackPolygon) return;
-            const blob = new Blob([JSON.stringify(setbackPolygon, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-            a.download = "koordinatlar.geojson"; a.click();
-        });
     </script>
 </body>
 </html>
