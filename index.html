@@ -86,7 +86,7 @@
 
         .canvas-box {
             width: 100%;
-            height: 340px;
+            height: 360px;
             background: #101216;
             border-radius: 6px;
             position: relative;
@@ -122,51 +122,39 @@
             justify-content: space-between;
             margin-top: 6px;
         }
-        .edge-row {
-            display: grid;
-            grid-template-columns: 35px 1fr 1fr 35px 25px;
-            gap: 4px;
-            align-items: center;
-            margin-bottom: 5px;
-            font-size: 11px;
-        }
     </style>
 </head>
 <body>
 
     <header class="mobile-header">
         <h1>TOCO MİMARİ ETÜT</h1>
-        <span>Mobil Prototip v0.3</span>
+        <span>Mobil Prototip v0.4 (Gerçek GeoJSON Motoru)</span>
     </header>
 
     <div class="app-container">
-        <!-- Parsel & GeoJSON / Manuel Panel -->
+        <!-- Parsel Verisi / GeoJSON Yükleme -->
         <div class="card">
-            <h2>1. Parsel Verisi & Kenarlar</h2>
+            <h2>1. Parsel Verisi (TKGM GeoJSON)</h2>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <label for="geojsonInput" class="btn btn-secondary" style="display:inline-block; cursor:pointer; flex:1; text-align:center; padding:8px;">GeoJSON Yükle</label>
+                <label for="geojsonInput" class="btn btn-primary" style="display:block; cursor:pointer; flex:1; text-align:center; padding:10px;">Dosyadan GeoJSON Yükle</label>
                 <input type="file" id="geojsonInput" accept=".json,.geojson" hidden>
+                <button id="loadSampleBtn" class="btn btn-secondary">Örnek Parsel</button>
             </div>
-            <div class="grid-2" style="margin-bottom: 8px;">
+            <div class="grid-2">
                 <div class="input-group">
                     <label>Mahalle</label>
-                    <input type="text" id="mahalleInput" value="Şarköy Mah.">
+                    <input type="text" id="mahalleInput" value="-">
                 </div>
                 <div class="input-group">
                     <label>Ada / Parsel</label>
-                    <input type="text" id="adaParselInput" value="142 / 8">
+                    <input type="text" id="adaParselInput" value="-">
                 </div>
-            </div>
-            <div id="edgesList"></div>
-            <div style="display:flex; gap:6px; margin-top:8px;">
-                <button id="addEdgeBtn" class="btn btn-secondary">+ Kenar</button>
-                <button id="calculateBtn" class="btn btn-accent" style="flex:2;">Çekme Sınırını Hesapla</button>
             </div>
         </div>
 
-        <!-- İmar & Plan Üretici -->
+        <!-- İmar & Çekmeler -->
         <div class="card">
-            <h2>2. İmar & Mimari Plan</h2>
+            <h2>2. İmar Durumu & Çekmeler</h2>
             <div class="grid-3" style="margin-bottom: 8px;">
                 <div class="input-group">
                     <label>TAKS</label>
@@ -177,8 +165,8 @@
                     <input type="number" id="kaksInput" step="0.10" value="0.80">
                 </div>
                 <div class="input-group">
-                    <label>Kat</label>
-                    <input type="number" id="katInput" value="2">
+                    <label>Yol Çekme (m)</label>
+                    <input type="number" id="yolSetback" value="5">
                 </div>
             </div>
             <div class="input-group" style="margin-bottom: 8px;">
@@ -188,7 +176,7 @@
                     <option value="3+1">3+1 Daire Yerleşimi</option>
                 </select>
             </div>
-            <button id="generatePlanBtn" class="btn btn-primary" disabled>Kat Planı ve 3D Üret</button>
+            <button id="calculateBtn" class="btn btn-accent" disabled>Çekme Sınırını ve Planı Hesapla</button>
         </div>
 
         <!-- Görselleştirme (2D / 3D) -->
@@ -209,7 +197,7 @@
             <table>
                 <thead><tr><th>Mahal</th><th>Alan</th></tr></thead>
                 <tbody id="roomsTableBody">
-                    <tr><td colspan="2" style="text-align:center; color:var(--text-muted);">Henüz plan üretilmedi</td></tr>
+                    <tr><td colspan="2" style="text-align:center; color:var(--text-muted);">Parsel bekleniyor</td></tr>
                 </tbody>
             </table>
             <div class="summary-box">
@@ -224,18 +212,27 @@
         const ctx = canvas.getContext('2d');
         const threeContainer = document.getElementById('threeContainer');
 
-        let manualEdges = [
-            { length: 18, type: 'yol', setback: 5 },
-            { length: 15, type: 'komsu', setback: 3 },
-            { length: 18, type: 'komsu', setback: 3 },
-            { length: 15, type: 'bitisik', setback: 0 }
-        ];
-
         let currentPolygon = null;
         let setbackPolygon = null;
         let generatedRooms = [];
         let activeMode = '2d';
         let scene, camera, renderer, controls;
+
+        // Örnek standart düzgün parsel
+        const sampleGeoJSON = {
+            "type": "Feature",
+            "properties": { "mahalle": "Şarköy Mah.", "ada": "142", "parsel": "8" },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[
+                    [26.9680, 39.4980],
+                    [26.9688, 39.4981],
+                    [26.9689, 39.4973],
+                    [26.9681, 39.4972],
+                    [26.9680, 39.4980]
+                ]]
+            }
+        };
 
         function resizeCanvas() {
             const parent = document.getElementById('canvasContainer');
@@ -251,7 +248,8 @@
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 100);
 
-        // GeoJSON Yükleme Desteği
+        document.getElementById('loadSampleBtn').addEventListener('click', () => loadParcel(sampleGeoJSON));
+
         document.getElementById('geojsonInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -259,112 +257,54 @@
             reader.onload = function(event) {
                 try {
                     const raw = JSON.parse(event.target.result);
-                    let feature = raw.type === 'FeatureCollection' ? raw.features[0] : raw;
-                    if (feature && feature.geometry) {
-                        const coords = feature.geometry.coordinates[0];
-                        manualEdges = [];
-                        for (let i = 0; i < coords.length - 1; i++) {
-                            const p1 = turf.point(coords[i]), p2 = turf.point(coords[i+1]);
-                            const len = Math.round(turf.distance(p1, p2, {units: 'kilometers'}) * 1000);
-                            manualEdges.push({ length: len > 0 ? len : 10, type: i === 0 ? 'yol' : 'komsu', setback: i === 0 ? 5 : 3 });
-                        }
-                        renderEdgesUI();
-                        buildPolygon();
-                        alert("GeoJSON başarıyla yüklendi ve kenarlara aktarıldı!");
-                    }
-                } catch(err) { alert("GeoJSON okunamadı!"); }
+                    let feat = raw.type === 'FeatureCollection' ? raw.features[0] : raw;
+                    if (feat && feat.geometry) loadParcel(feat);
+                    else alert("Geçersiz GeoJSON dosyası!");
+                } catch(err) { alert("Dosya okunamadı!"); }
             };
             reader.readAsText(file);
         });
 
-        function renderEdgesUI() {
-            const container = document.getElementById('edgesList');
-            container.innerHTML = '';
-            manualEdges.forEach((edge, idx) => {
-                const div = document.createElement('div');
-                div.className = 'edge-row';
-                div.innerHTML = `
-                    <span><strong>K${idx + 1}</strong></span>
-                    <input type="number" step="0.5" min="1" value="${edge.length}" onchange="updateEdge(${idx}, 'length', this.value)" title="Boy (m)">
-                    <select onchange="updateEdge(${idx}, 'type', this.value)" style="font-size:10px;">
-                        <option value="yol" ${edge.type === 'yol' ? 'selected' : ''}>Yol(5m)</option>
-                        <option value="komsu" ${edge.type === 'komsu' ? 'selected' : ''}>Komşu(3m)</option>
-                        <option value="bitisik" ${edge.type === 'bitisik' ? 'selected' : ''}>Bitişik(0)</option>
-                    </select>
-                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="updateEdge(${idx}, 'setback', this.value)" title="Çekme">
-                    <button onclick="removeEdge(${idx})" style="background:#721c24; color:white; border:none; border-radius:4px; height:24px; cursor:pointer;">×</button>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        window.updateEdge = (idx, field, val) => {
-            manualEdges[idx][field] = field === 'type' ? val : (parseFloat(val) || 0);
-            if (field === 'type') {
-                manualEdges[idx].setback = val === 'yol' ? 5 : (val === 'komsu' ? 3 : 0);
-                renderEdgesUI();
+        function loadParcel(feature) {
+            if (feature.geometry.type === 'MultiPolygon') {
+                feature.geometry.type = 'Polygon';
+                feature.geometry.coordinates = feature.geometry.coordinates[0];
             }
-            buildPolygon();
-        };
+            currentPolygon = feature;
+            setbackPolygon = null;
 
-        window.removeEdge = (idx) => {
-            if (manualEdges.length <= 3) { alert("En az 3 kenar olmalı!"); return; }
-            manualEdges.splice(idx, 1);
-            renderEdgesUI();
-            buildPolygon();
-        };
+            const props = feature.properties || {};
+            document.getElementById('mahalleInput').value = props.mahalle || props.MAHALLE || "Merkez";
+            document.getElementById('adaParselInput').value = (props.ada || "1") + " / " + (props.parsel || "1");
 
-        document.getElementById('addEdgeBtn').addEventListener('click', () => {
-            manualEdges.push({ length: 10, type: 'komsu', setback: 3 });
-            renderEdgesUI();
-            buildPolygon();
-        });
-
-        function buildPolygon() {
-            try {
-                let pts = [[0, 0]];
-                let x = 0, y = 0;
-                for (let i = 0; i < manualEdges.length; i++) {
-                    const len = manualEdges[i].length;
-                    if (i === 0) x += len;
-                    else if (i === 1) y += len;
-                    else if (i === 2) x -= len;
-                    else y -= len;
-                    pts.push([x, y]);
-                }
-                pts[pts.length - 1] = pts[0];
-                currentPolygon = turf.polygon([pts]);
-                drawScene2D();
-            } catch (e) { console.error(e); }
+            document.getElementById('calculateBtn').disabled = false;
+            drawScene2D();
+            alert("Parsel başarıyla yüklendi!");
         }
 
-        renderEdgesUI();
-        buildPolygon();
+        // Otomatik örnek parsel ile başlat
+        loadParcel(sampleGeoJSON);
 
         document.getElementById('calculateBtn').addEventListener('click', () => {
             if (!currentPolygon) return;
             try {
-                const coords = currentPolygon.geometry.coordinates[0];
-                const offsetLines = coords.slice(0, -1).map((p1, i) => {
-                    const p2 = coords[(i + 1) % coords.length];
-                    const dx = p2[0] - p1[0], dy = p2[1] - p1[1], len = Math.hypot(dx, dy);
-                    if (len === 0) return { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1] };
-                    const nx = dy / len, ny = -dx / len;
-                    const d = manualEdges[i].setback;
-                    return { x1: p1[0] + nx * d, y1: p1[0] + ny * d, x2: p2[0] + nx * d, y2: p2[1] + ny * d }; // Düzenlendi
-                });
+                const setbackDist = parseFloat(document.getElementById('yolSetback').value) || 3;
+                // Turf.js buffer kullanarak gerçek ve düzgün arsa çekmesi yapıyoruz (- metre içeri)
+                setbackPolygon = turf.buffer(currentPolygon, -setbackDist, {units: 'meters'});
+                
+                if (!setbackPolygon) {
+                    alert("Çekme mesafesi arsa için çok büyük!");
+                    return;
+                }
 
-                // Alternatif güvenli ofset
-                setbackPolygon = turf.buffer(currentPolygon, -1.5, {units: 'meters'});
-                document.getElementById('generatePlanBtn').disabled = false;
-                alert("Çekme sınırı hesaplandı!");
-                drawScene2D();
-            } catch (e) { alert("Çekme mesafeleri parsel için çok büyük!"); }
+                generatePlan();
+            } catch(e) {
+                alert("Hesaplama hatası: " + e.message);
+            }
         });
 
-        document.getElementById('generatePlanBtn').addEventListener('click', () => {
-            if (!currentPolygon) return;
-            const totalNet = turf.area(currentPolygon) * 0.65; // Yaklaşık taban oturumu
+        function generatePlan() {
+            const totalNet = turf.area(setbackPolygon);
             const type = document.getElementById('daireTipiSelect').value;
 
             generatedRooms = type === '2+1' ? [
@@ -395,35 +335,39 @@
 
             document.getElementById('mode3dBtn').disabled = false;
             switchMode('2d');
-        });
+        }
 
         function drawScene2D() {
             if (!currentPolygon) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             const bbox = turf.bbox(currentPolygon);
-            const padding = 30;
-            const spanX = (bbox[2] - bbox[0]) || 1;
-            const spanY = (bbox[3] - bbox[1]) || 1;
+            const padding = 35;
+            const latFactor = Math.cos(((bbox[1] + bbox[3]) / 2) * Math.PI / 180);
+            const spanX = (bbox[2] - bbox[0]) * latFactor || 0.001;
+            const spanY = (bbox[3] - bbox[1]) || 0.001;
             const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
             const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 
-            function toScreen(pt) {
+            function toScreen(coord) {
                 return {
-                    x: canvas.width / 2 + (pt[0] - center[0]) * scale,
-                    y: canvas.height / 2 - (pt[1] - center[1]) * scale
+                    x: canvas.width / 2 + (coord[0] - center[0]) * latFactor * scale,
+                    y: canvas.height / 2 - (coord[1] - center[1]) * scale
                 };
             }
 
+            // Parsel Sınırı (Mavi)
             const coords = currentPolygon.geometry.coordinates[0];
-            for (let i = 0; i < coords.length - 1; i++) {
-                const p1 = toScreen(coords[i]), p2 = toScreen(coords[i + 1]);
-                ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-                ctx.lineWidth = manualEdges[i]?.type === 'yol' ? 4 : 2;
-                ctx.strokeStyle = manualEdges[i]?.type === 'yol' ? '#3b82f6' : '#f59e0b';
-                ctx.stroke();
-            }
+            ctx.beginPath();
+            coords.forEach((pt, i) => {
+                const s = toScreen(pt);
+                if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+            });
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#3b82f6';
+            ctx.stroke();
 
+            // Çekme Sınırı & İç Plan (Yeşil)
             if (setbackPolygon) {
                 const sCoords = setbackPolygon.geometry.coordinates[0];
                 const screenPts = sCoords.map(toScreen);
@@ -434,7 +378,9 @@
                 ctx.closePath();
                 ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
                 ctx.fill();
-                ctx.lineWidth = 2; ctx.strokeStyle = "#10b981"; ctx.stroke();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#10b981";
+                ctx.stroke();
 
                 if (generatedRooms.length > 0) {
                     ctx.clip();
@@ -484,7 +430,7 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf1f5f9);
             camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
-            camera.position.set(12, 14, 12);
+            camera.position.set(10, 12, 10);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(w, h);
@@ -496,7 +442,7 @@
             dirLight.position.set(10, 20, 10);
             scene.add(dirLight);
 
-            const planW = 10, planD = 8, startX = -planW / 2, startZ = -planD / 2;
+            const planW = 9, planD = 7, startX = -planW / 2, startZ = -planD / 2;
             generatedRooms.forEach(room => {
                 const rw = room.rw * planW, rd = room.rh * planD;
                 const cx = startX + room.rx * planW + rw / 2, cz = startZ + room.ry * planD + rd / 2;
