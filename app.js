@@ -30,19 +30,25 @@ const sampleGeoJSON = {
 
 function resizeCanvas() {
     const parent = document.getElementById('canvasContainer');
-    const w = parent.clientWidth || window.innerWidth;
-    const h = parent.clientHeight || 400;
+    // Mobilde sıfır yükseklik sorununu önlemek için minimum 400px garanti ediyoruz
+    const w = parent && parent.clientWidth > 50 ? parent.clientWidth : window.innerWidth;
+    const h = parent && parent.clientHeight > 50 ? parent.clientHeight : 400;
+    
     canvas.width = w;
     canvas.height = h;
+
     if (renderer && camera) {
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
     }
-    if (activeMode === '2d' && currentPolygon) drawScene2D();
+    if (activeMode === '2d') {
+        drawScene2D();
+    }
 }
+
 window.addEventListener('resize', resizeCanvas);
-window.addEventListener('load', resizeCanvas);
+setTimeout(resizeCanvas, 200); // Sayfa yüklendikten hemen sonra tetikle
 
 // Dosya Yükleme
 document.getElementById('geojsonInput').addEventListener('change', function(e) {
@@ -54,11 +60,11 @@ document.getElementById('geojsonInput').addEventListener('change', function(e) {
             const raw = JSON.parse(event.target.result);
             handleGeoJSON(raw);
         } catch (err) {
-            alert("Dosya okunamadı: " + err.message);
+            alert("Dosya okunamadı!");
         }
     };
     reader.readAsText(file);
-    e.target.value = ''; // Aynı dosyayı tekrar seçebilmek için sıfırla
+    e.target.value = '';
 });
 
 document.getElementById('loadSampleBtn').addEventListener('click', function() {
@@ -73,12 +79,10 @@ function handleGeoJSON(data) {
         feature = data;
     } else if (data.type === 'Polygon' || data.type === 'MultiPolygon') {
         feature = { type: 'Feature', properties: {}, geometry: data };
-    } else if (Array.isArray(data) && data.length > 0) {
-        feature = data[0];
     }
 
     if (!feature || !feature.geometry) {
-        alert("Geçerli parsel sınır verisi bulunamadı.");
+        alert("Geçerli parsel verisi bulunamadı!");
         return;
     }
 
@@ -87,7 +91,6 @@ function handleGeoJSON(data) {
         feature.geometry.coordinates = feature.geometry.coordinates[0];
     }
 
-    // Z koordinatı (yükseklik) varsa temizle: [lon, lat, 0] -> [lon, lat]
     feature.geometry.coordinates[0] = feature.geometry.coordinates[0].map(c => [c[0], c[1]]);
 
     currentPolygon = feature;
@@ -96,10 +99,10 @@ function handleGeoJSON(data) {
     switchMode('2d');
 
     const props = feature.properties || {};
-    document.getElementById('mahalleInput').value = props.mahalle || props.Mahalle || props.MAHALLE || "Burhaniye";
-    const ada = props.ada || props.Ada || props.ADA || props.adaNo || "";
-    const parsel = props.parsel || props.Parsel || props.PARSEL || props.parselNo || "";
-    if (ada || parsel) document.getElementById('adaParselInput').value = `${ada} / ${parsel}`;
+    document.getElementById('mahalleInput').value = props.mahalle || props.Mahalle || props.MAHALLE || "Şarköy Mah.";
+    const ada = props.ada || props.Ada || props.ADA || "142";
+    const parsel = props.parsel || props.Parsel || props.PARSEL || "8";
+    document.getElementById('adaParselInput').value = `${ada} / ${parsel}`;
 
     const coords = feature.geometry.coordinates[0];
     edgesData = [];
@@ -107,14 +110,12 @@ function handleGeoJSON(data) {
         const p1 = turf.point(coords[i]);
         const p2 = turf.point(coords[i + 1]);
         const len = turf.distance(p1, p2, { units: 'kilometers' }) * 1000;
-        if (len > 0.05) { // Sıfır uzunluklu çift noktaları ele
-            edgesData.push({
-                index: i, start: coords[i], end: coords[i + 1],
-                length: len,
-                type: i === 0 ? 'yol' : 'komsu',
-                setback: i === 0 ? 3 : 1.5
-            });
-        }
+        edgesData.push({
+            index: i, start: coords[i], end: coords[i + 1],
+            length: len,
+            type: i === 0 ? 'yol' : 'komsu',
+            setback: i === 0 ? 3 : 1.5
+        });
     }
 
     renderEdgesUI();
@@ -122,9 +123,9 @@ function handleGeoJSON(data) {
     document.getElementById('calculateBtn').disabled = false;
     document.getElementById('generatePlanBtn').disabled = true;
     document.getElementById('mode3dBtn').disabled = true;
-    document.getElementById('statusText').innerText = "Parsel yüklendi (" + edgesData.length + " kenar)";
+    document.getElementById('statusText').innerText = "Parsel yüklendi.";
+    
     resizeCanvas();
-    drawScene2D();
 }
 
 function renderEdgesUI() {
@@ -161,17 +162,14 @@ function updateImarSummary() {
 }
 
 document.getElementById('calculateBtn').addEventListener('click', () => {
-    if (!currentPolygon || edgesData.length < 3) return;
+    if (!currentPolygon) return;
     try {
+        const coords = currentPolygon.geometry.coordinates[0];
         const center = turf.center(currentPolygon).geometry.coordinates;
         const mLat = 111320, mLon = 111320 * Math.cos(center[1] * Math.PI / 180);
 
-        const localPts = edgesData.map(e => ({
-            x: (e.start[0] - center[0]) * mLon,
-            y: (e.start[1] - center[1]) * mLat
-        }));
-
         let areaSum = 0;
+        const localPts = coords.slice(0, -1).map(c => ({ x: (c[0] - center[0]) * mLon, y: (c[1] - center[1]) * mLat }));
         for (let i = 0; i < localPts.length; i++) {
             const j = (i + 1) % localPts.length;
             areaSum += (localPts[j].x - localPts[i].x) * (localPts[j].y + localPts[i].y);
@@ -201,10 +199,10 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
         setbackPolygon = turf.polygon([newGeoCoords]);
         updateCoordsTable(newGeoCoords);
         document.getElementById('generatePlanBtn').disabled = false;
-        document.getElementById('statusText').innerText = "Çekme hesaplandı!";
+        document.getElementById('statusText').innerText = "Çekme hesaplandı.";
         drawScene2D();
     } catch (e) {
-        alert("Çekme hesaplama hatası: " + e.message);
+        alert("Çekme hesaplama hatası!");
     }
 });
 
@@ -237,7 +235,7 @@ document.getElementById('generatePlanBtn').addEventListener('click', () => {
     updateRoomsTable(totalNet);
     document.getElementById('mode3dBtn').disabled = false;
     document.getElementById('downloadImgBtn').disabled = false;
-    document.getElementById('statusText').innerText = "2D Plan ve 3D Maket Hazır!";
+    document.getElementById('statusText').innerText = "Plan Hazır!";
     switchMode('2d');
 });
 
@@ -261,14 +259,15 @@ function updateCoordsTable(coords) {
 }
 
 function drawScene2D() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!currentPolygon) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const bbox = turf.bbox(currentPolygon);
-    const padding = 45;
+    const padding = 40;
     const latFactor = Math.cos(((bbox[1] + bbox[3]) / 2) * Math.PI / 180);
-    const spanX = (bbox[2] - bbox[0]) * latFactor || 0.0001;
-    const spanY = (bbox[3] - bbox[1]) || 0.0001;
+    const spanX = (bbox[2] - bbox[0]) * latFactor || 0.001;
+    const spanY = (bbox[3] - bbox[1]) || 0.001;
+    
     const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
     const centerGeo = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 
@@ -279,16 +278,17 @@ function drawScene2D() {
         };
     }
 
+    // Parsel Kenarlarını Çiz
     edgesData.forEach((edge, i) => {
         const p1 = toScreen(edge.start), p2 = toScreen(edge.end);
         ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-        ctx.lineWidth = edge.type === 'yol' ? 5 : 2.5;
+        ctx.lineWidth = edge.type === 'yol' ? 4 : 2;
         ctx.strokeStyle = edge.type === 'yol' ? '#3b82f6' : '#f59e0b';
         ctx.stroke();
 
         ctx.fillStyle = "#ffffff";
-        ctx.font = "11px sans-serif";
-        ctx.fillText(`K${i + 1}`, p1.x + 4, p1.y - 4);
+        ctx.font = "10px sans-serif";
+        ctx.fillText(`K${i + 1}`, p1.x + 3, p1.y - 3);
     });
 
     if (setbackPolygon) {
@@ -299,7 +299,7 @@ function drawScene2D() {
         ctx.beginPath();
         screenPts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
         ctx.closePath();
-        ctx.fillStyle = "rgba(16, 185, 129, 0.2)";
+        ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#10b981";
@@ -318,7 +318,7 @@ function drawScene2D() {
                 ctx.strokeStyle = "#111827"; ctx.lineWidth = 2; ctx.strokeRect(x, y, rw, rh);
 
                 const cx = x + rw / 2, cy = y + rh / 2;
-                ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = "#111827"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
                 ctx.fillText(room.id, cx, cy + 3); ctx.textAlign = "left";
             });
@@ -346,9 +346,9 @@ function switchMode(mode) {
 }
 
 function build3DIsometricModel() {
-    if (typeof THREE === 'undefined') { alert("3D motoru yükleniyor, tekrar deneyin."); return; }
+    if (typeof THREE === 'undefined') return;
     threeContainer.innerHTML = '';
-    const w = threeContainer.clientWidth || 350, h = threeContainer.clientHeight || 380;
+    const w = threeContainer.clientWidth || 350, h = threeContainer.clientHeight || 400;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf1f5f9);
@@ -372,11 +372,6 @@ function build3DIsometricModel() {
         const floor = new THREE.Mesh(new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1), new THREE.MeshStandardMaterial({ color: room.color }));
         floor.position.set(cx, 0.08, cz);
         scene.add(floor);
-
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        const w1 = new THREE.Mesh(new THREE.BoxGeometry(rw, 1.5, 0.12), wallMat);
-        w1.position.set(cx, 0.75, cz - rd / 2);
-        scene.add(w1);
     });
 
     function animate() {
