@@ -6,9 +6,8 @@ let currentPolygon = null;
 let setbackPolygon = null;
 let edgesData = [];
 let generatedRooms = [];
-let activeMode = '2d'; // '2d' veya '3d'
+let activeMode = '2d';
 
-// Three.js değişkenleri
 let scene, camera, renderer, controls;
 
 const sampleGeoJSON = {
@@ -43,7 +42,6 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// GeoJSON Yükleme
 document.getElementById('geojsonInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -80,7 +78,7 @@ function loadParcelData(geojson) {
             index: i, start: coords[i], end: coords[i + 1],
             length: turf.distance(p1, p2, { units: 'kilometers' }) * 1000,
             type: i === 0 ? 'yol' : 'komsu',
-            setback: i === 0 ? 5 : 3
+            setback: i === 0 ? 3 : 1.5 // Örnek parsel için daha güvenli başlangıç çekmeleri (3m yol, 1.5m komşu)
         });
     }
 
@@ -114,7 +112,7 @@ function renderEdgesUI() {
 
 window.updateEdgeType = (idx, val) => {
     edgesData[idx].type = val;
-    edgesData[idx].setback = val === 'yol' ? 5 : (val === 'komsu' ? 3 : 0);
+    edgesData[idx].setback = val === 'yol' ? 3 : (val === 'komsu' ? 1.5 : 0);
     renderEdgesUI();
     drawScene2D();
 };
@@ -126,7 +124,7 @@ function updateImarSummary() {
     document.getElementById('imarOzet').innerText = `Parsel: ${area.toFixed(1)} m² | Max Taban: ${(area * taks).toFixed(1)} m²`;
 }
 
-// Çekme Hesaplama
+// Güvenli Çekme ve Oturum Hesaplama
 document.getElementById('calculateBtn').addEventListener('click', () => {
     if (!currentPolygon) return;
     try {
@@ -162,17 +160,22 @@ document.getElementById('calculateBtn').addEventListener('click', () => {
         const newGeoCoords = newLocalPts.map(p => [center[0] + p.x / mLon, center[1] + p.y / mLat]);
         newGeoCoords.push(newGeoCoords[0]);
 
-        setbackPolygon = turf.polygon([newGeoCoords]);
+        const tempPolygon = turf.polygon([newGeoCoords]);
+        if (turf.area(tempPolygon) <= 0) {
+            alert("Girilen çekme mesafeleri çok büyük, lütfen mesafeleri küçültün!");
+            return;
+        }
+
+        setbackPolygon = tempPolygon;
         updateCoordsTable(newGeoCoords);
         document.getElementById('generatePlanBtn').disabled = false;
         document.getElementById('statusText').innerText = "Çekme sınırı hazır. Plan üretebilirsiniz.";
         drawScene2D();
     } catch (e) {
-        alert("Çekme mesafeleri parselden büyük!");
+        alert("Çekme hesaplanırken bir hata oluştu. Lütfen mesafeleri kontrol edin.");
     }
 });
 
-// 2D Kat Planı ve Tefriş Üretimi
 document.getElementById('generatePlanBtn').addEventListener('click', () => {
     if (!setbackPolygon) return;
     const totalNet = turf.area(setbackPolygon);
@@ -207,7 +210,7 @@ document.getElementById('generatePlanBtn').addEventListener('click', () => {
     document.getElementById('mode3dBtn').disabled = false;
     document.getElementById('downloadImgBtn').disabled = false;
     document.getElementById('statusText').innerText = "2D Tefrişli Plan ve 3D Maket Hazır!";
-    drawScene2D();
+    switchMode('2d');
 });
 
 function updateRoomsTable(totalNet) {
@@ -229,7 +232,6 @@ function updateCoordsTable(coords) {
     document.getElementById('exportJsonBtn').disabled = false;
 }
 
-// 2D Çizim (Vaziyet + Gerçek Tefrişli Kat Planı)
 function drawScene2D() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!currentPolygon) return;
@@ -250,7 +252,6 @@ function drawScene2D() {
         };
     }
 
-    // 1. Parsel Sınırları (Yol / Komşu)
     edgesData.forEach(edge => {
         const p1 = toScreen(edge.start), p2 = toScreen(edge.end);
         ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
@@ -263,7 +264,6 @@ function drawScene2D() {
         ctx.fillText(edge.type === 'yol' ? `YOL (${edge.length.toFixed(1)}m)` : `${edge.length.toFixed(1)}m`, midX - 20, midY - 5);
     });
 
-    // 2. Çekme Sonrası Bina Oturumu
     if (setbackPolygon) {
         const bCoords = setbackPolygon.geometry.coordinates[0];
         const screenPts = bCoords.map(toScreen);
@@ -278,9 +278,8 @@ function drawScene2D() {
         ctx.strokeStyle = "#10b981";
         ctx.stroke();
 
-        // Eğer 2D Kat Planı Üretildiyse Poligon İçine Odaları & Mobilya Tefrişlerini Çiz
         if (generatedRooms.length > 0) {
-            ctx.clip(); // Odaların bina dış duvarından taşmasını engeller
+            ctx.clip();
             const minX = Math.min(...screenPts.map(p => p.x));
             const maxX = Math.max(...screenPts.map(p => p.x));
             const minY = Math.min(...screenPts.map(p => p.y));
@@ -294,19 +293,14 @@ function drawScene2D() {
                 const rw = room.rw * w;
                 const rh = room.rh * h;
 
-                // Zemin Parke/Seramik Dolgusu
                 ctx.fillStyle = room.color;
                 ctx.fillRect(x, y, rw, rh);
-
-                // İç Duvar Çizgileri
                 ctx.strokeStyle = "#111827";
                 ctx.lineWidth = 3;
                 ctx.strokeRect(x, y, rw, rh);
 
-                // Temsili Mobilya Tefrişi (Koltuk, Yatak, Masa)
                 drawFurnitureIcon(ctx, room.furniture, x, y, rw, rh);
 
-                // Oda Numarası Yuvarlak Rozeti (1. Görseldeki gibi)
                 const cx = x + rw / 2, cy = y + rh / 2;
                 ctx.fillStyle = "#ffffff";
                 ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
@@ -326,28 +320,23 @@ function drawScene2D() {
 function drawFurnitureIcon(ctx, type, x, y, w, h) {
     ctx.fillStyle = "rgba(30, 41, 59, 0.35)";
     if (type === "bed" || type === "singlebed") {
-        // Yatak çizimi
         const bw = Math.min(w * 0.55, 42), bh = Math.min(h * 0.55, 48);
         ctx.fillRect(x + 8, y + 8, bw, bh);
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x + 11, y + 10, bw - 6, 8); // Yastık
+        ctx.fillRect(x + 11, y + 10, bw - 6, 8);
     } else if (type === "sofa") {
-        // L Koltuk & Sehpa
         ctx.fillRect(x + 8, y + h * 0.3, 14, h * 0.45);
         ctx.fillRect(x + 8, y + h * 0.65, w * 0.45, 14);
-        ctx.fillRect(x + 30, y + h * 0.42, 18, 12); // Orta sehpa
+        ctx.fillRect(x + 30, y + h * 0.42, 18, 12);
     } else if (type === "kitchen") {
-        // Mutfak Tezgahı
         ctx.fillRect(x + w - 14, y + 4, 10, h - 8);
     } else if (type === "bath") {
-        // Duşakabin
         ctx.strokeStyle = "rgba(30, 41, 59, 0.5)";
         ctx.lineWidth = 1;
         ctx.strokeRect(x + 4, y + 4, w * 0.45, h * 0.45);
     }
 }
 
-// 2D / 3D Mod Geçişi
 document.getElementById('mode2dBtn').addEventListener('click', () => switchMode('2d'));
 document.getElementById('mode3dBtn').addEventListener('click', () => switchMode('3d'));
 
@@ -367,14 +356,13 @@ function switchMode(mode) {
     }
 }
 
-// 3D İzometrik Maket Oluşturucu (2. Görseldeki Kuşbakışı Kesit Maket)
 function build3DIsometricModel() {
     threeContainer.innerHTML = '';
     const w = threeContainer.clientWidth;
     const h = threeContainer.clientHeight;
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf1f5f9); // Katalog beyaz/açık gri zemin
+    scene.background = new THREE.Color(0xf1f5f9);
 
     camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
     camera.position.set(14, 16, 14);
@@ -387,7 +375,6 @@ function build3DIsometricModel() {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // Işıklar
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.75);
@@ -395,14 +382,12 @@ function build3DIsometricModel() {
     dirLight.castShadow = true;
     scene.add(dirLight);
 
-    // Zemin Tablası (Arsa Tabanı)
     const baseGeo = new THREE.BoxGeometry(16, 0.2, 14);
     const baseMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0 });
     const baseMesh = new THREE.Mesh(baseGeo, baseMat);
     baseMesh.position.y = -0.1;
     scene.add(baseMesh);
 
-    // Odaları 3D Duvar ve Mobilyalarla Yükselt
     const planW = 11, planD = 9;
     const startX = -planW / 2, startZ = -planD / 2;
 
@@ -412,14 +397,12 @@ function build3DIsometricModel() {
         const cx = startX + room.rx * planW + rw / 2;
         const cz = startZ + room.ry * planD + rd / 2;
 
-        // Oda Zemini (Parke / Seramik rengi)
         const floorGeo = new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1);
         const floorMat = new THREE.MeshStandardMaterial({ color: room.color });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.position.set(cx, 0.08, cz);
         scene.add(floor);
 
-        // Kesit Duvarlar (Yarım yükseklikte maket duvarı - 2. görseldeki gibi)
         const wallH = 1.6;
         const wallMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
 
@@ -431,7 +414,6 @@ function build3DIsometricModel() {
         w2.position.set(cx - rw / 2, wallH / 2, cz);
         scene.add(w2);
 
-        // 3D Mobilya Kütleleri (Yatak, Koltuk, Tezgah)
         if (room.furniture === 'bed' || room.furniture === 'singlebed') {
             const bed = new THREE.Mesh(
                 new THREE.BoxGeometry(rw * 0.5, 0.45, rd * 0.55),
@@ -465,7 +447,6 @@ function build3DIsometricModel() {
     animate();
 }
 
-// Katalog Görselini PNG Olarak İndir
 document.getElementById('downloadImgBtn').addEventListener('click', () => {
     const link = document.createElement('a');
     link.download = `TOCO_Kat_Plani_${document.getElementById('adaParselInput').value.replace(/\s+/g, '')}.png`;
@@ -473,7 +454,6 @@ document.getElementById('downloadImgBtn').addEventListener('click', () => {
     link.click();
 });
 
-// GeoJSON Dışa Aktarma
 document.getElementById('exportJsonBtn').addEventListener('click', () => {
     if (!setbackPolygon) return;
     const blob = new Blob([JSON.stringify(setbackPolygon, null, 2)], { type: 'application/json' });
