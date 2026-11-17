@@ -41,7 +41,7 @@
         .btn-accent { background: var(--accent); color: #052e16; width: 100%; margin-top: 8px; }
 
         .canvas-box {
-            width: 100%; height: 380px; background: #101216; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid var(--border);
+            width: 100%; height: 400px; background: #101216; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid var(--border);
         }
         canvas { width: 100%; height: 100%; display: block; }
 
@@ -106,8 +106,7 @@
         const canvas = document.getElementById('planCanvas');
         const ctx = canvas.getContext('2d');
 
-        let currentCoords = []; // Yerel metre koordinatları [x, y]
-        let currentGeoPolygon = null;
+        let currentCoords = [];
         let edgesData = [];
         let setbackPolygonCoords = null;
 
@@ -142,7 +141,6 @@
                         let coords = feat.geometry.coordinates[0];
                         if (feat.geometry.type === 'MultiPolygon') coords = feat.geometry.coordinates[0][0];
                         
-                        // Coğrafi koordinatları metreye çevir
                         const first = coords[0];
                         const mLat = 111320, mLon = 111320 * Math.cos(first[1] * Math.PI / 180);
                         const local = coords.map(c => [(c[0] - first[0]) * mLon, (c[1] - first[1]) * mLat]);
@@ -169,14 +167,13 @@
                 const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
                 edgesData.push({
                     length: len,
-                    setback: i === 0 ? 5 : 3 // Yol 5m, diğerleri 3m varsayılan
+                    setback: i === 0 ? 5 : 3
                 });
             }
 
             renderEdgesUI();
             document.getElementById('calculateBtn').disabled = false;
 
-            // Alan hesapla
             let area = 0;
             for (let i = 0; i < currentCoords.length - 1; i++) {
                 area += (currentCoords[i+1][0] - currentCoords[i][0]) * (currentCoords[i+1][1] + currentCoords[i][1]);
@@ -208,7 +205,6 @@
         document.getElementById('calculateBtn').addEventListener('click', () => {
             if (currentCoords.length === 0) return;
             try {
-                // Metre bazlı güvenli içe öteleme (setback) hesabı
                 let areaSum = 0;
                 for (let i = 0; i < currentCoords.length - 1; i++) {
                     areaSum += (currentCoords[i+1][0] - currentCoords[i][0]) * (currentCoords[i+1][1] + currentCoords[i][1]);
@@ -234,7 +230,6 @@
                 });
                 newPts.push(newPts[0]);
 
-                // Net oturum alanı hesapla
                 let netArea = 0;
                 for (let i = 0; i < newPts.length - 1; i++) {
                     netArea += (newPts[i+1][0] - newPts[i][0]) * (newPts[i+1][1] + newPts[i][1]);
@@ -259,7 +254,6 @@
             if (currentCoords.length === 0) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Min-Max sınırları bul
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
             currentCoords.forEach(p => {
                 if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
@@ -277,11 +271,11 @@
             function toScreen(pt) {
                 return {
                     x: canvas.width / 2 + (pt[0] - centerX) * scale,
-                    y: canvas.height / 2 - (pt[1] - centerY) * scale // Y ekseni ters çevrilir
+                    y: canvas.height / 2 - (pt[1] - centerY) * scale
                 };
             }
 
-            // 1. Parsel Sınırını Çiz (Mavi)
+            // 1. Dış Parsel Sınırını Çiz (Mavi)
             ctx.beginPath();
             currentCoords.forEach((pt, i) => {
                 const s = toScreen(pt);
@@ -291,7 +285,7 @@
             ctx.strokeStyle = '#3b82f6';
             ctx.stroke();
 
-            // Kenar uzunluklarını yaz
+            // Dış parsel kenar uzunlukları
             for (let i = 0; i < currentCoords.length - 1; i++) {
                 const p1 = toScreen(currentCoords[i]);
                 const p2 = toScreen(currentCoords[i+1]);
@@ -302,7 +296,7 @@
                 ctx.fillText(`K${i+1}: ${edgesData[i].length.toFixed(1)}m`, midX - 15, midY - 5);
             }
 
-            // 2. Çekme Sınırı / Bina Oturum Alanını Çiz (Yeşil)
+            // 2. İç Bina Oturum Alanını Çiz (Yeşil) ve Kenar Ölçülerini Yaz
             if (setbackPolygonCoords) {
                 ctx.beginPath();
                 setbackPolygonCoords.forEach((pt, i) => {
@@ -316,14 +310,31 @@
                 ctx.strokeStyle = "#10b981";
                 ctx.stroke();
 
+                // Yeşil alanın kenar uzunluklarını hesapla ve yaz
+                for (let i = 0; i < setbackPolygonCoords.length - 1; i++) {
+                    const sp1 = setbackPolygonCoords[i];
+                    const sp2 = setbackPolygonCoords[i+1];
+                    const lenBina = Math.hypot(sp2[0] - sp1[0], sp2[1] - sp1[1]);
+                    
+                    const screen1 = toScreen(sp1);
+                    const screen2 = toScreen(sp2);
+                    const mX = (screen1.x + screen2.x) / 2;
+                    const mY = (screen1.y + screen2.y) / 2;
+
+                    ctx.fillStyle = "#a7f3d0";
+                    ctx.font = "9px sans-serif";
+                    ctx.fillText(`${lenBina.toFixed(1)}m`, mX - 10, mY - 3);
+                }
+
                 let bCX = 0, bCY = 0;
                 setbackPolygonCoords.forEach(p => { const s = toScreen(p); bCX += s.x; bCY += s.y; });
                 bCX /= setbackPolygonCoords.length; bCY /= setbackPolygonCoords.length;
 
                 ctx.fillStyle = "#10b981";
-                ctx.font = "bold 11px sans-serif";
+                ctx.font = "bold 10px sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText("BİNA OTURUM ALANI", bCX, bCY);
+                ctx.fillText("BİNA OTURUM", bCX, bCY - 6);
+                ctx.fillText("ALANI", bCX, bCY + 6);
                 ctx.textAlign = "left";
             }
         }
