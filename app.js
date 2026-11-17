@@ -2,238 +2,165 @@ const canvas = document.getElementById('planCanvas');
 const ctx = canvas.getContext('2d');
 const threeContainer = document.getElementById('threeContainer');
 
+let manualEdges = [
+    { length: 15, type: 'yol', setback: 3 },
+    { length: 12, type: 'komsu', setback: 1.5 },
+    { length: 15, type: 'komsu', setback: 1.5 },
+    { length: 12, type: 'bitisik', setback: 0 }
+];
+
 let currentPolygon = null;
 let setbackPolygon = null;
-let edgesData = [];
 let generatedRooms = [];
 let activeMode = '2d';
-
 let scene, camera, renderer, controls;
-
-const sampleGeoJSON = {
-    "type": "FeatureCollection",
-    "features": [{
-        "type": "Feature",
-        "properties": { "mahalle": "Şarköy Mah.", "ada": "142", "parsel": "8" },
-        "geometry": {
-            "type": "Polygon",
-            "coordinates": [[
-                [26.968500, 39.498100],
-                [26.968680, 39.498110],
-                [26.968695, 39.497980],
-                [26.968510, 39.497970],
-                [26.968500, 39.498100]
-            ]]
-        }
-    }]
-};
 
 function resizeCanvas() {
     const parent = document.getElementById('canvasContainer');
     const w = parent ? parent.clientWidth : window.innerWidth;
     const h = parent ? parent.clientHeight : 420;
-    
     canvas.width = w;
     canvas.height = h;
-
     if (renderer && camera) {
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
     }
-    if (activeMode === '2d' && currentPolygon) {
-        drawScene2D();
-    }
+    if (activeMode === '2d') drawScene2D();
 }
 
 window.addEventListener('resize', resizeCanvas);
 setTimeout(resizeCanvas, 100);
 
-// --- GeoJSON Dosya Yükleme ve Güvenli Ayrıştırma ---
-document.getElementById('geojsonInput').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        try {
-            const rawData = JSON.parse(event.target.result);
-            processGeoJSONData(rawData);
-        } catch (err) {
-            alert("GeoJSON dosyası okunurken hata oluştu: " + err.message);
-        }
-    };
-    reader.readAsText(file);
-    e.target.value = ''; // Reset file input
+// Varsayılan Parsel Yükle
+document.getElementById('loadDefaultManual').addEventListener('click', () => {
+    manualEdges = [
+        { length: 16, type: 'yol', setback: 3 },
+        { length: 14, type: 'komsu', setback: 1.5 },
+        { length: 16, type: 'komsu', setback: 1.5 },
+        { length: 14, type: 'bitisik', setback: 0 }
+    ];
+    initManualParcel();
 });
 
-document.getElementById('loadSampleBtn').addEventListener('click', function() {
-    processGeoJSONData(sampleGeoJSON);
+document.getElementById('addEdgeBtn').addEventListener('click', () => {
+    manualEdges.push({ length: 10, type: 'komsu', setback: 1.5 });
+    initManualParcel();
 });
 
-function processGeoJSONData(data) {
-    let feature = null;
-
-    // Farklı GeoJSON yapılarını güvenle yakala
-    if (data.type === 'FeatureCollection' && data.features && data.features.length > 0) {
-        feature = data.features[0];
-    } else if (data.type === 'Feature') {
-        feature = data;
-    } else if (data.type === 'Polygon' || data.type === 'MultiPolygon') {
-        feature = { type: 'Feature', properties: {}, geometry: data };
-    }
-
-    if (!feature || !feature.geometry || !feature.geometry.coordinates) {
-        alert("Yüklenen dosyada geçerli bir parsel geometrisi bulunamadı!");
-        return;
-    }
-
-    // Eğer MultiPolygon ise ilk poligonun koordinatlarını al
-    if (feature.geometry.type === 'MultiPolygon') {
-        feature.geometry.type = 'Polygon';
-        feature.geometry.coordinates = feature.geometry.coordinates[0];
-    }
-
-    // Koordinatları [Boylam, Enlem] formatına sabitle (Z eksenini temizle)
-    try {
-        const ring = feature.geometry.coordinates[0];
-        feature.geometry.coordinates[0] = ring.map(c => [parseFloat(c[0]), parseFloat(c[1])]);
-    } catch (ex) {
-        alert("Parsel koordinat yapısı geçersiz!");
-        return;
-    }
-
-    currentPolygon = feature;
-    setbackPolygon = null;
-    generatedRooms = [];
-    switchMode('2d');
-
-    // Tapu / Ada Parsel Bilgilerini Doldurmaya Çalış
-    const props = feature.properties || {};
-    const mahalle = props.mahalle || props.Mahalle || props.MAHALLE || props.neighborhood || "Şarköy Mah.";
-    const ada = props.ada || props.Ada || props.ADA || props.adaNo || "142";
-    const parsel = props.parsel || props.Parsel || props.PARSEL || props.parselNo || "8";
-
-    document.getElementById('mahalleInput').value = mahalle;
-    document.getElementById('adaParselInput').value = `${ada} / ${parsel}`;
-
-    // Kenarları Hesapla
-    const coords = feature.geometry.coordinates[0];
-    edgesData = [];
-    for (let i = 0; i < coords.length - 1; i++) {
-        const p1 = turf.point(coords[i]);
-        const p2 = turf.point(coords[i + 1]);
-        const len = turf.distance(p1, p2, { units: 'kilometers' }) * 1000;
-        
-        edgesData.push({
-            index: i,
-            start: coords[i],
-            end: coords[i + 1],
-            length: len,
-            type: i === 0 ? 'yol' : 'komsu',
-            setback: i === 0 ? 3 : 1.5
-        });
-    }
-
+function initManualParcel() {
     renderEdgesUI();
-    updateImarSummary();
-    
-    document.getElementById('calculateBtn').disabled = false;
-    document.getElementById('generatePlanBtn').disabled = true;
-    document.getElementById('mode3dBtn').disabled = true;
-    document.getElementById('statusText').innerText = `Parsel Yüklendi (${edgesData.length} Kenar)`;
-
-    resizeCanvas();
-    drawScene2D();
+    buildPolygonFromEdges();
 }
+initManualParcel();
 
 function renderEdgesUI() {
     const container = document.getElementById('edgesList');
     container.innerHTML = '';
-    edgesData.forEach((edge, idx) => {
+    manualEdges.forEach((edge, idx) => {
         const div = document.createElement('div');
         div.className = 'edge-item';
+        div.style.cssText = "display:grid; grid-template-columns: 40px 1fr 1fr 45px 30px; gap:4px; align-items:center; margin-bottom:4px; font-size:11px;";
         div.innerHTML = `
-            <span><strong>K${idx + 1}</strong><br><small>${edge.length.toFixed(1)}m</small></span>
-            <select onchange="updateEdgeType(${idx}, this.value)">
+            <span><strong>K${idx + 1}</strong></span>
+            <input type="number" step="0.5" min="1" value="${edge.length}" onchange="updateEdgeVal(${idx}, 'length', this.value)" title="Kenar Boyu (m)">
+            <select onchange="updateEdgeVal(${idx}, 'type', this.value)">
                 <option value="yol" ${edge.type === 'yol' ? 'selected' : ''}>Yol (3m)</option>
                 <option value="komsu" ${edge.type === 'komsu' ? 'selected' : ''}>Komşu (1.5m)</option>
                 <option value="bitisik" ${edge.type === 'bitisik' ? 'selected' : ''}>Bitişik (0m)</option>
             </select>
-            <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="edgesData[${idx}].setback = parseFloat(this.value)||0">
+            <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="updateEdgeVal(${idx}, 'setback', this.value)" title="Çekme Payı">
+            <button onclick="removeEdge(${idx})" style="background:#721c24; color:white; border:none; border-radius:4px; cursor:pointer;">×</button>
         `;
         container.appendChild(div);
     });
 }
 
-window.updateEdgeType = (idx, val) => {
-    edgesData[idx].type = val;
-    edgesData[idx].setback = val === 'yol' ? 3 : (val === 'komsu' ? 1.5 : 0);
-    renderEdgesUI();
-    drawScene2D();
+window.updateEdgeVal = (idx, field, val) => {
+    manualEdges[idx][field] = field === 'type' ? val : (parseFloat(val) || 0);
+    if (field === 'type') {
+        manualEdges[idx].setback = val === 'yol' ? 3 : (val === 'komsu' ? 1.5 : 0);
+        renderEdgesUI();
+    }
+    buildPolygonFromEdges();
 };
+
+window.removeEdge = (idx) => {
+    if (manualEdges.length <= 3) {
+        alert("Parsel en az 3 kenarlı olmalıdır!");
+        return;
+    }
+    manualEdges.splice(idx, 1);
+    initManualParcel();
+};
+
+// Kenar uzunluklarından geometrik poligon üretme (Dikdörtgen/Çokgen Yaklaşımı)
+function buildPolygonFromEdges() {
+    try {
+        let pts = [[0, 0]];
+        let currX = 0, currY = 0;
+        let angle = 0;
+
+        // Basit ortogonal (dik açılı) veya kapalı poligon üretimi
+        for (let i = 0; i < manualEdges.length; i++) {
+            const len = manualEdges[i].length;
+            if (i === 0) currX += len;
+            else if (i === 1) currY += len;
+            else if (i === 2) currX -= len;
+            else {
+                // Kalan kenarları başlangıca kapat
+                currY -= len;
+            }
+            pts.push([currX, currY]);
+        }
+        pts[pts.length - 1] = pts[0]; // Kapat
+
+        currentPolygon = turf.polygon([pts]);
+        updateImarSummary();
+        document.getElementById('statusText').innerText = "Parsel hazır. Çekme hesaplayın.";
+        drawScene2D();
+    } catch (e) {
+        console.error(e);
+    }
+}
 
 function updateImarSummary() {
     if (!currentPolygon) return;
     const area = turf.area(currentPolygon);
     const taks = parseFloat(document.getElementById('taksInput').value) || 0.4;
-    document.getElementById('imarOzet').innerText = `Parsel: ${area.toFixed(1)} m² | Max Taban: ${(area * taks).toFixed(1)} m²`;
+    document.getElementById('imarOzet').innerText = `Parsel Alanı: ${area.toFixed(1)} m² | Max Taban: ${(area * taks).toFixed(1)} m²`;
 }
 
-// Çekme Sınırı Hesaplama
+// Çekme Hesaplama
 document.getElementById('calculateBtn').addEventListener('click', () => {
     if (!currentPolygon) return;
     try {
         const coords = currentPolygon.geometry.coordinates[0];
-        const center = turf.center(currentPolygon).geometry.coordinates;
-        const mLat = 111320;
-        const mLon = 111320 * Math.cos(center[1] * Math.PI / 180);
-
-        let areaSum = 0;
-        const localPts = coords.slice(0, -1).map(c => ({
-            x: (c[0] - center[0]) * mLon,
-            y: (c[1] - center[1]) * mLat
-        }));
-
-        for (let i = 0; i < localPts.length; i++) {
-            const j = (i + 1) % localPts.length;
-            areaSum += (localPts[j].x - localPts[i].x) * (localPts[j].y + localPts[i].y);
-        }
-        const isClockwise = areaSum > 0;
-
-        const offsetLines = localPts.map((p1, i) => {
-            const p2 = localPts[(i + 1) % localPts.length];
-            const dx = p2.x - p1.x;
-            const dy = p2.y - p1.y;
-            const len = Math.hypot(dx, dy);
-            const nx = isClockwise ? dy / len : -dy / len;
-            const ny = isClockwise ? -dx / len : dx / len;
-            const d = edgesData[i].setback;
-            return { x1: p1.x + nx * d, y1: p1.y + ny * d, x2: p2.x + nx * d, y2: p2.y + ny * d };
+        const offsetLines = coords.slice(0, -1).map((p1, i) => {
+            const p2 = coords[(i + 1) % coords.length];
+            const dx = p2[0] - p1[0], dy = p2[1] - p1[1], len = Math.hypot(dx, dy);
+            if (len === 0) return { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1] };
+            const nx = dy / len, ny = -dx / len;
+            const d = manualEdges[i].setback;
+            return { x1: p1[0] + nx * d, y1: p1[1] + ny * d, x2: p2[0] + nx * d, y2: p2[1] + ny * d };
         });
 
-        const newLocalPts = offsetLines.map((l2, i) => {
+        const newPts = offsetLines.map((l2, i) => {
             const l1 = offsetLines[(i - 1 + offsetLines.length) % offsetLines.length];
             const denom = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1.y1 - l1.y2) * (l2.x1 - l2.x2);
-            if (Math.abs(denom) < 1e-9) return { x: l2.x1, y: l2.y1 };
+            if (Math.abs(denom) < 1e-9) return [l2.x1, l2.y1];
             const t = ((l1.x1 - l2.x1) * (l2.y1 - l2.y2) - (l1.y1 - l2.y1) * (l2.x1 - l2.x2)) / denom;
-            return { x: l1.x1 + t * (l1.x2 - l1.x1), y: l1.y1 + t * (l1.y2 - l1.y1) };
+            return [l1.x1 + t * (l1.x2 - l1.x1), l1.y1 + t * (l1.y2 - l1.y1)];
         });
+        newPts.push(newPts[0]);
 
-        const newGeoCoords = newLocalPts.map(p => [
-            center[0] + p.x / mLon,
-            center[1] + p.y / mLat
-        ]);
-        newGeoCoords.push(newGeoCoords[0]);
-
-        setbackPolygon = turf.polygon([newGeoCoords]);
-        updateCoordsTable(newGeoCoords);
-        
+        setbackPolygon = turf.polygon([newPts]);
+        updateCoordsTable(newPts);
         document.getElementById('generatePlanBtn').disabled = false;
         document.getElementById('statusText').innerText = "Çekme Sınırı Hesaplandı.";
         drawScene2D();
     } catch (e) {
-        alert("Çekme sınırları parsel boyutuna göre çok büyük!");
+        alert("Çekme mesafeleri çok büyük!");
     }
 });
 
@@ -285,51 +212,41 @@ function updateCoordsTable(coords) {
     const tbody = document.querySelector('#coordsTable tbody');
     tbody.innerHTML = '';
     for (let i = 0; i < coords.length - 1; i++) {
-        tbody.innerHTML += `<tr><td>B${i + 1}</td><td>${coords[i][0].toFixed(5)}</td><td>${coords[i][1].toFixed(5)}</td></tr>`;
+        tbody.innerHTML += `<tr><td>B${i + 1}</td><td>${coords[i][0].toFixed(2)}</td><td>${coords[i][1].toFixed(2)}</td></tr>`;
     }
     document.getElementById('exportJsonBtn').disabled = false;
 }
 
-// 2D Çizim Motoru
 function drawScene2D() {
     if (!currentPolygon) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const bbox = turf.bbox(currentPolygon);
     const padding = 40;
-    const latFactor = Math.cos(((bbox[1] + bbox[3]) / 2) * Math.PI / 180);
-    const spanX = (bbox[2] - bbox[0]) * latFactor || 0.001;
-    const spanY = (bbox[3] - bbox[1]) || 0.001;
-    
+    const spanX = (bbox[2] - bbox[0]) || 1;
+    const spanY = (bbox[3] - bbox[1]) || 1;
     const scale = Math.min((canvas.width - padding * 2) / spanX, (canvas.height - padding * 2) / spanY);
-    const centerGeo = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+    const center = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 
-    function toScreen(coord) {
+    function toScreen(pt) {
         return {
-            x: canvas.width / 2 + (coord[0] - centerGeo[0]) * latFactor * scale,
-            y: canvas.height / 2 - (coord[1] - centerGeo[1]) * scale
+            x: canvas.width / 2 + (pt[0] - center[0]) * scale,
+            y: canvas.height / 2 - (pt[1] - center[1]) * scale
         };
     }
 
-    // Parsel Sınırlarını Çiz
-    edgesData.forEach((edge, i) => {
-        const p1 = toScreen(edge.start);
-        const p2 = toScreen(edge.end);
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.lineWidth = edge.type === 'yol' ? 4 : 2;
-        ctx.strokeStyle = edge.type === 'yol' ? '#3b82f6' : '#f59e0b';
+    const coords = currentPolygon.geometry.coordinates[0];
+    for (let i = 0; i < coords.length - 1; i++) {
+        const p1 = toScreen(coords[i]), p2 = toScreen(coords[i + 1]);
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+        ctx.lineWidth = manualEdges[i]?.type === 'yol' ? 4 : 2;
+        ctx.strokeStyle = manualEdges[i]?.type === 'yol' ? '#3b82f6' : '#f59e0b';
         ctx.stroke();
-
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "10px sans-serif";
-        ctx.fillText(`K${i + 1}`, p1.x + 3, p1.y - 3);
-    });
+    }
 
     if (setbackPolygon) {
-        const bCoords = setbackPolygon.geometry.coordinates[0];
-        const screenPts = bCoords.map(toScreen);
+        const sCoords = setbackPolygon.geometry.coordinates[0];
+        const screenPts = sCoords.map(toScreen);
 
         ctx.save();
         ctx.beginPath();
@@ -337,41 +254,30 @@ function drawScene2D() {
         ctx.closePath();
         ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
         ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#10b981";
-        ctx.stroke();
+        ctx.lineWidth = 2; ctx.strokeStyle = "#10b981"; ctx.stroke();
 
         if (generatedRooms.length > 0) {
             ctx.clip();
-            const minX = Math.min(...screenPts.map(p => p.x));
-            const maxX = Math.max(...screenPts.map(p => p.x));
-            const minY = Math.min(...screenPts.map(p => p.y));
-            const maxY = Math.max(...screenPts.map(p => p.y));
+            const minX = Math.min(...screenPts.map(p => p.x)), maxX = Math.max(...screenPts.map(p => p.x));
+            const minY = Math.min(...screenPts.map(p => p.y)), maxY = Math.max(...screenPts.map(p => p.y));
             const w = maxX - minX, h = maxY - minY;
 
             generatedRooms.forEach(room => {
                 const x = minX + room.rx * w, y = minY + room.ry * h;
                 const rw = room.rw * w, rh = room.rh * h;
-                
-                ctx.fillStyle = room.color;
-                ctx.fillRect(x, y, rw, rh);
-                ctx.strokeStyle = "#111827";
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x, y, rw, rh);
+                ctx.fillStyle = room.color; ctx.fillRect(x, y, rw, rh);
+                ctx.strokeStyle = "#111827"; ctx.lineWidth = 2; ctx.strokeRect(x, y, rw, rh);
 
                 const cx = x + rw / 2, cy = y + rh / 2;
-                ctx.fillStyle = "#ffffff";
-                ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = "#111827"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
-                ctx.fillText(room.id, cx, cy + 3);
-                ctx.textAlign = "left";
+                ctx.fillText(room.id, cx, cy + 3); ctx.textAlign = "left";
             });
         }
         ctx.restore();
     }
 }
 
-// 3D Mod Geçişi
 document.getElementById('mode2dBtn').addEventListener('click', () => switchMode('2d'));
 document.getElementById('mode3dBtn').addEventListener('click', () => switchMode('3d'));
 
@@ -379,7 +285,6 @@ function switchMode(mode) {
     activeMode = mode;
     document.getElementById('mode2dBtn').classList.toggle('active', mode === '2d');
     document.getElementById('mode3dBtn').classList.toggle('active', mode === '3d');
-    
     if (mode === '2d') {
         canvas.style.display = 'block';
         threeContainer.style.display = 'none';
@@ -394,12 +299,10 @@ function switchMode(mode) {
 function build3DIsometricModel() {
     if (typeof THREE === 'undefined') return;
     threeContainer.innerHTML = '';
-    const w = threeContainer.clientWidth || 350;
-    const h = threeContainer.clientHeight || 400;
+    const w = threeContainer.clientWidth || 350, h = threeContainer.clientHeight || 400;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf1f5f9);
-    
     camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
     camera.position.set(14, 16, 14);
 
@@ -409,23 +312,15 @@ function build3DIsometricModel() {
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
-    const planW = 11, planD = 9;
-    const startX = -planW / 2, startZ = -planD / 2;
-
+    const planW = 11, planD = 9, startX = -planW / 2, startZ = -planD / 2;
     generatedRooms.forEach(room => {
         const rw = room.rw * planW, rd = room.rh * planD;
-        const cx = startX + room.rx * planW + rw / 2;
-        const cz = startZ + room.ry * planD + rd / 2;
-        
-        const floor = new THREE.Mesh(
-            new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1),
-            new THREE.MeshStandardMaterial({ color: room.color })
-        );
+        const cx = startX + room.rx * planW + rw / 2, cz = startZ + room.ry * planD + rd / 2;
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(rw - 0.1, 0.15, rd - 0.1), new THREE.MeshStandardMaterial({ color: room.color }));
         floor.position.set(cx, 0.08, cz);
         scene.add(floor);
     });
@@ -439,7 +334,7 @@ function build3DIsometricModel() {
     animate();
 }
 
-document.getElementById('downloadImgBtn').addEventListener('click', () => {
+document.getElementById('downloadImgBtn').getElementById && document.getElementById('downloadImgBtn').addEventListener('click', () => {
     const link = document.createElement('a');
     link.download = `TOCO_Plan.png`;
     link.href = activeMode === '2d' ? canvas.toDataURL("image/png") : renderer.domElement.toDataURL("image/png");
@@ -449,8 +344,6 @@ document.getElementById('downloadImgBtn').addEventListener('click', () => {
 document.getElementById('exportJsonBtn').addEventListener('click', () => {
     if (!setbackPolygon) return;
     const blob = new Blob([JSON.stringify(setbackPolygon, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = "koordinatlar.geojson";
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = "koordinatlar.geojson"; a.click();
 });
