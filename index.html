@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         :root {
-            --primary: #721c24; /* TOCO Vişne Kırmızı */
+            --primary: #721c24;
             --primary-dark: #4a1016;
             --bg-dark: #0f1115;
             --panel-bg: #1a1d24;
@@ -26,86 +26,43 @@
             padding: 14px;
             text-align: center;
             border-bottom: 2px solid #a72834;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            position: sticky; top: 0; z-index: 100;
         }
         .mobile-header h1 { font-size: 15px; color: white; }
         .mobile-header span { font-size: 10px; color: #f8d7da; }
 
         .app-container {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            max-width: 600px; margin: 0 auto; padding: 10px; display: flex; flex-direction: column; gap: 10px;
         }
-
         .card {
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 10px;
+            background-color: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
         }
         .card h2 {
-            font-size: 11px;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 4px;
+            font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px;
         }
-
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 
         .input-group label { display: block; font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
         .input-group input, .input-group select {
-            width: 100%;
-            background: var(--bg-dark);
-            border: 1px solid var(--border);
-            color: white;
-            padding: 7px;
-            border-radius: 5px;
-            font-size: 11px;
+            width: 100%; background: var(--bg-dark); border: 1px solid var(--border); color: white; padding: 7px; border-radius: 5px; font-size: 11px;
         }
-
         .btn {
-            padding: 9px;
-            border: none;
-            border-radius: 5px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            text-align: center;
+            padding: 9px; border: none; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;
         }
         .btn-primary { background: var(--primary); color: white; flex: 1; }
         .btn-secondary { background: #323642; color: white; flex: 1; }
         .btn-accent { background: var(--accent); color: #052e16; width: 100%; }
 
         .canvas-box {
-            width: 100%;
-            height: 360px;
-            background: #101216;
-            border-radius: 6px;
-            position: relative;
-            overflow: hidden;
-            border: 1px solid var(--border);
+            width: 100%; height: 360px; background: #101216; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid var(--border);
         }
         canvas { width: 100%; height: 100%; display: block; }
         #threeContainer { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; }
 
         .view-switch { display: flex; gap: 6px; margin-bottom: 6px; }
         .mode-btn {
-            flex: 1;
-            background: #2b303b;
-            color: #d1d5db;
-            border: 1px solid var(--border);
-            padding: 7px;
-            border-radius: 5px;
-            font-size: 11px;
-            font-weight: 600;
+            flex: 1; background: #2b303b; color: #d1d5db; border: 1px solid var(--border); padding: 7px; border-radius: 5px; font-size: 11px; font-weight: 600;
         }
         .mode-btn.active { background: var(--primary); color: white; }
 
@@ -113,14 +70,10 @@
         th, td { padding: 5px; border-bottom: 1px solid var(--border); text-align: left; }
         th { color: var(--text-muted); }
         .summary-box {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid var(--accent);
-            padding: 6px;
-            border-radius: 5px;
-            font-size: 11px;
-            display: flex;
-            justify-content: space-between;
-            margin-top: 6px;
+            background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent); padding: 6px; border-radius: 5px; font-size: 11px; display: flex; justify-content: space-between; margin-top: 6px;
+        }
+        .edge-row {
+            display: grid; grid-template-columns: 40px 1fr 1fr 45px; gap: 4px; align-items: center; margin-bottom: 5px; font-size: 11px;
         }
     </style>
 </head>
@@ -128,11 +81,11 @@
 
     <header class="mobile-header">
         <h1>TOCO MİMARİ ETÜT</h1>
-        <span>Mobil Prototip v0.5 (Otomatik GeoJSON)</span>
+        <span>Mobil Prototip v0.6 (Özelleştirilebilir Çekmeler & Proje Tipi)</span>
     </header>
 
     <div class="app-container">
-        <!-- 1. Parsel Verisi (GeoJSON) -->
+        <!-- 1. Parsel Yükleme -->
         <div class="card">
             <h2>1. Parsel Verisi (TKGM GeoJSON)</h2>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
@@ -141,49 +94,43 @@
                 <button id="loadSampleBtn" class="btn btn-secondary">Örnek Parsel</button>
             </div>
             <div class="grid-2">
-                <div class="input-group">
-                    <label>Mahalle</label>
-                    <input type="text" id="mahalleInput" value="-" readonly>
-                </div>
-                <div class="input-group">
-                    <label>Ada / Parsel</label>
-                    <input type="text" id="adaParselInput" value="-" readonly>
-                </div>
+                <div class="input-group"><label>Mahalle</label><input type="text" id="mahalleInput" value="-" readonly></div>
+                <div class="input-group"><label>Ada / Parsel</label><input type="text" id="adaParselInput" value="-" readonly></div>
             </div>
         </div>
 
-        <!-- 2. İmar & Çekmeler -->
+        <!-- 2. Proje Tipi & Kenar Çekmeleri -->
         <div class="card">
-            <h2>2. İmar Durumu & Çekmeler</h2>
-            <div class="grid-3" style="margin-bottom: 8px;">
+            <h2>2. Proje Tipi & Kenar Çekmeleri</h2>
+            <div class="grid-2" style="margin-bottom: 8px;">
                 <div class="input-group">
-                    <label>TAKS</label>
-                    <input type="number" id="taksInput" step="0.05" value="0.40">
+                    <label>Proje Tipi</label>
+                    <select id="projectType">
+                        <option value="villa">Müstakil Villa</option>
+                        <option value="daire">Apartman / Daire</option>
+                    </select>
                 </div>
                 <div class="input-group">
-                    <label>KAKS</label>
-                    <input type="number" id="kaksInput" step="0.10" value="0.80">
-                </div>
-                <div class="input-group">
-                    <label>Çekme (m)</label>
-                    <input type="number" id="setbackInput" value="3">
+                    <label>Daire / Oda Tipi</label>
+                    <select id="daireTipiSelect">
+                        <option value="2+1">2+1 Konsept</option>
+                        <option value="3+1">3+1 Konsept</option>
+                    </select>
                 </div>
             </div>
-            <div class="input-group" style="margin-bottom: 8px;">
-                <label>Daire Konsepti</label>
-                <select id="daireTipiSelect">
-                    <option value="2+1">2+1 Daire Yerleşimi</option>
-                    <option value="3+1">3+1 Daire Yerleşimi</option>
-                </select>
+            
+            <div id="edgesList" style="max-height:160px; overflow-y:auto; margin-bottom:8px;">
+                <div style="color:var(--text-muted); text-align:center; font-size:11px;">Önce parsel yükleyin</div>
             </div>
-            <button id="calculateBtn" class="btn btn-accent" disabled>Çekme Sınırını ve Planı Hesapla</button>
+            
+            <button id="calculateBtn" class="btn btn-accent" disabled>Çekme Sınırını ve Taslağı Hesapla</button>
         </div>
 
-        <!-- 3. Görselleştirme (2D / 3D) -->
+        <!-- 3. Görselleştirme -->
         <div class="card">
             <div class="view-switch">
-                <button id="mode2dBtn" class="mode-btn active">2D Kat Planı</button>
-                <button id="mode3dBtn" class="mode-btn" disabled>3D İzometrik Maket</button>
+                <button id="mode2dBtn" class="mode-btn active">2D Vaziyet & Yerleşim</button>
+                <button id="mode3dBtn" class="mode-btn" disabled>3D Maket</button>
             </div>
             <div class="canvas-box" id="canvasContainer">
                 <canvas id="planCanvas"></canvas>
@@ -193,16 +140,16 @@
 
         <!-- 4. Katalog Özeti -->
         <div class="card">
-            <h2>Oda Dağılımı & Net/Brüt</h2>
+            <h2>Oda Dağılımı & Alanlar</h2>
             <table>
                 <thead><tr><th>Mahal</th><th>Alan</th></tr></thead>
                 <tbody id="roomsTableBody">
-                    <tr><td colspan="2" style="text-align:center; color:var(--text-muted);">GeoJSON bekleniyor</td></tr>
+                    <tr><td colspan="2" style="text-align:center; color:var(--text-muted);">Plan bekleniyor</td></tr>
                 </tbody>
             </table>
             <div class="summary-box">
-                <span>Net: <strong id="netAlanTxt">0 m²</strong></span>
-                <span>Brüt (%15): <strong id="brutAlanTxt">0 m²</strong></span>
+                <span>Net Oturum: <strong id="netAlanTxt">0 m²</strong></span>
+                <span>Toplam Brüt: <strong id="brutAlanTxt">0 m²</strong></span>
             </div>
         </div>
     </div>
@@ -214,6 +161,7 @@
 
         let currentPolygon = null;
         let setbackPolygon = null;
+        let edgesData = [];
         let generatedRooms = [];
         let activeMode = '2d';
         let scene, camera, renderer, controls;
@@ -276,21 +224,94 @@
             document.getElementById('mahalleInput').value = props.mahalle || props.MAHALLE || "Merkez";
             document.getElementById('adaParselInput').value = (props.ada || "1") + " / " + (props.parsel || "1");
 
+            // Kenarları çıkar ve UI oluştur (Varsayılan: 1. kenar Yol 5m, diğerleri Komşu 3m)
+            const coords = feature.geometry.coordinates[0];
+            edgesData = [];
+            for (let i = 0; i < coords.length - 1; i++) {
+                const p1 = turf.point(coords[i]), p2 = turf.point(coords[i+1]);
+                const len = turf.distance(p1, p2, {units: 'kilometers'}) * 1000;
+                edgesData.push({
+                    index: i,
+                    length: len,
+                    type: i === 0 ? 'yol' : 'komsu',
+                    setback: i === 0 ? 5 : 3
+                });
+            }
+
+            renderEdgesUI();
             document.getElementById('calculateBtn').disabled = false;
             drawScene2D();
-            alert("Parsel başarıyla yüklendi!");
+            alert("Parsel yüklendi! Kenar çekme mesafelerini kontrol edebilirsiniz.");
         }
+
+        function renderEdgesUI() {
+            const container = document.getElementById('edgesList');
+            container.innerHTML = '';
+            edgesData.forEach((edge, idx) => {
+                const div = document.createElement('div');
+                div.className = 'edge-row';
+                div.innerHTML = `
+                    <span><strong>K${idx+1}</strong> (${edge.length.toFixed(1)}m)</span>
+                    <select onchange="updateEdgeType(${idx}, this.value)" style="font-size:10px; background:#0f1115; color:white; border:1px solid var(--border); padding:5px; border-radius:4px;">
+                        <option value="yol" ${edge.type==='yol'?'selected':''}>Yol (5m)</option>
+                        <option value="komsu" ${edge.type==='komsu'?'selected':''}>Komşu (3m)</option>
+                        <option value="bitisik" ${edge.type==='bitisik'?'selected':''}>Bitişik (0m)</option>
+                    </select>
+                    <input type="number" step="0.5" min="0" value="${edge.setback}" onchange="edgesData[${idx}].setback = parseFloat(this.value)||0" style="background:#0f1115; color:white; border:1px solid var(--border); padding:5px; border-radius:4px; text-align:center;">
+                    <span style="font-size:10px; color:var(--text-muted);">Çekme</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.updateEdgeType = (idx, val) => {
+            edgesData[idx].type = val;
+            edgesData[idx].setback = val === 'yol' ? 5 : (val === 'komsu' ? 3 : 0);
+            renderEdgesUI();
+        };
 
         loadParcel(sampleGeoJSON);
 
         document.getElementById('calculateBtn').addEventListener('click', () => {
             if (!currentPolygon) return;
             try {
-                const setbackDist = parseFloat(document.getElementById('setbackInput').value) || 3;
-                setbackPolygon = turf.buffer(currentPolygon, -setbackDist, {units: 'meters'});
-                
-                if (!setbackPolygon) {
-                    alert("Çekme mesafesi parsel için çok büyük!");
+                // Her kenarın kendi çekme mesafesine göre güvenli poligon oluşturma yaklaşımı
+                const coords = currentPolygon.geometry.coordinates[0];
+                const center = turf.center(currentPolygon).geometry.coordinates;
+                const mLat = 111320, mLon = 111320 * Math.cos(center[1] * Math.PI / 180);
+
+                let areaSum = 0;
+                const localPts = coords.slice(0, -1).map(c => ({ x: (c[0] - center[0]) * mLon, y: (c[1] - center[1]) * mLat }));
+                for (let i = 0; i < localPts.length; i++) {
+                    const j = (i + 1) % localPts.length;
+                    areaSum += (localPts[j].x - localPts[i].x) * (localPts[j].y + localPts[i].y);
+                }
+                const isClockwise = areaSum > 0;
+
+                const offsetLines = localPts.map((p1, i) => {
+                    const p2 = localPts[(i + 1) % localPts.length];
+                    const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy);
+                    if (len === 0) return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+                    const nx = isClockwise ? dy / len : -dy / len;
+                    const ny = isClockwise ? -dx / len : dx / len;
+                    const d = edgesData[i].setback;
+                    return { x1: p1.x + nx * d, y1: p1.y + ny * d, x2: p2.x + nx * d, y2: p2.y + ny * d };
+                });
+
+                const newLocalPts = offsetLines.map((l2, i) => {
+                    const l1 = offsetLines[(i - 1 + offsetLines.length) % offsetLines.length];
+                    const denom = (l1.x1 - l1.x2) * (l2.y1 - l2.y2) - (l1.y1 - l1.y2) * (l2.x1 - l2.x2);
+                    if (Math.abs(denom) < 1e-9) return { x: l2.x1, y: l2.y1 };
+                    const t = ((l1.x1 - l2.x1) * (l2.y1 - l2.y2) - (l1.y1 - l2.y1) * (l2.x1 - l2.x2)) / denom;
+                    return { x: l1.x1 + t * (l1.x2 - l1.x1), y: l1.y1 + t * (l1.y2 - l1.y1) };
+                });
+
+                const newGeoCoords = newLocalPts.map(p => [center[0] + p.x / mLon, center[1] + p.y / mLat]);
+                newGeoCoords.push(newGeoCoords[0]);
+
+                setbackPolygon = turf.polygon([newGeoCoords]);
+                if (turf.area(setbackPolygon) <= 0) {
+                    alert("Girilen çekme mesafeleri parsel için çok büyük!");
                     return;
                 }
 
@@ -302,25 +323,36 @@
 
         function generatePlan() {
             const totalNet = turf.area(setbackPolygon);
-            const type = document.getElementById('daireTipiSelect').value;
+            const pType = document.getElementById('projectType').value;
+            const rType = document.getElementById('daireTipiSelect').value;
 
-            generatedRooms = type === '2+1' ? [
-                { id: 1, name: "Salon", area: totalNet * 0.32, color: "#e8dcc8", rx: 0, ry: 0.35, rw: 0.55, rh: 0.65 },
-                { id: 2, name: "Yatak Odası", area: totalNet * 0.18, color: "#dfcbb2", rx: 0, ry: 0, rw: 0.55, rh: 0.35 },
-                { id: 3, name: "Çocuk Odası", area: totalNet * 0.16, color: "#e5d4be", rx: 0.55, ry: 0.48, rw: 0.25, rh: 0.52 },
-                { id: 4, name: "Mutfak", area: totalNet * 0.15, color: "#d8dee9", rx: 0.80, ry: 0.48, rw: 0.20, rh: 0.40 },
-                { id: 5, name: "Banyo", area: totalNet * 0.06, color: "#cbd5e1", rx: 0.55, ry: 0, rw: 0.25, rh: 0.24 },
-                { id: 6, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.55, ry: 0.24, rw: 0.45, rh: 0.24 },
-                { id: 7, name: "Balkon", area: totalNet * 0.05, color: "#94a3b8", rx: 0.80, ry: 0.88, rw: 0.20, rh: 0.12 }
-            ] : [
-                { id: 1, name: "Salon", area: totalNet * 0.30, color: "#e8dcc8", rx: 0, ry: 0.35, rw: 0.50, rh: 0.65 },
-                { id: 2, name: "Ebeveyn Yatak", area: totalNet * 0.18, color: "#dfcbb2", rx: 0, ry: 0, rw: 0.50, rh: 0.35 },
-                { id: 3, name: "1. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.50, ry: 0.50, rw: 0.25, rh: 0.50 },
-                { id: 4, name: "2. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.75, ry: 0.50, rw: 0.25, rh: 0.50 },
-                { id: 5, name: "Mutfak", area: totalNet * 0.12, color: "#d8dee9", rx: 0.75, ry: 0.22, rw: 0.25, rh: 0.28 },
-                { id: 6, name: "Banyo", area: totalNet * 0.06, color: "#cbd5e1", rx: 0.50, ry: 0, rw: 0.25, rh: 0.22 },
-                { id: 7, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.50, ry: 0.22, rw: 0.25, rh: 0.28 }
-            ];
+            // Proje tipine göre gerçekçi oranlar
+            if (pType === 'villa') {
+                generatedRooms = [
+                    { id: 1, name: "Giriş / Antre", area: totalNet * 0.10, color: "#cbd5e1", rx: 0, ry: 0, rw: 0.3, rh: 0.3 },
+                    { id: 2, name: "Salon & Mutfak (Amerikan)", area: totalNet * 0.45, color: "#e8dcc8", rx: 0.3, ry: 0, rw: 0.7, rh: 0.6 },
+                    { id: 3, name: "Ebeveyn Yatak Odası", area: totalNet * 0.25, color: "#dfcbb2", rx: 0, ry: 0.3, rw: 0.3, rh: 0.7 },
+                    { id: 4, name: "Ortak Banyo", area: totalNet * 0.10, color: "#cbd5e1", rx: 0.3, ry: 0.6, rw: 0.3, rh: 0.4 },
+                    { id: 5, name: "Veranda / Teras", area: totalNet * 0.10, color: "#94a3b8", rx: 0.6, ry: 0.6, rw: 0.4, rh: 0.4 }
+                ];
+            } else {
+                generatedRooms = rType === '2+1' ? [
+                    { id: 1, name: "Salon", area: totalNet * 0.32, color: "#e8dcc8", rx: 0, ry: 0, rw: 0.5, rh: 0.6 },
+                    { id: 2, name: "Yatak Odası", area: totalNet * 0.20, color: "#dfcbb2", rx: 0.5, ry: 0, rw: 0.5, rh: 0.3 },
+                    { id: 3, name: "Çocuk Odası", area: totalNet * 0.16, color: "#e5d4be", rx: 0.5, ry: 0.3, rw: 0.5, rh: 0.3 },
+                    { id: 4, name: "Mutfak", area: totalNet * 0.14, color: "#d8dee9", rx: 0, ry: 0.6, rw: 0.4, rh: 0.4 },
+                    { id: 5, name: "Banyo", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.4, ry: 0.6, rw: 0.3, rh: 0.4 },
+                    { id: 6, name: "Antre / Hol", area: totalNet * 0.10, color: "#cbd5e1", rx: 0.7, ry: 0.6, rw: 0.3, rh: 0.4 }
+                ] : [
+                    { id: 1, name: "Salon", area: totalNet * 0.28, color: "#e8dcc8", rx: 0, ry: 0, rw: 0.5, rh: 0.5 },
+                    { id: 2, name: "Ebeveyn Yatak", area: totalNet * 0.18, color: "#dfcbb2", rx: 0.5, ry: 0, rw: 0.5, ry: 0, rw: 0.5, rh: 0.3 },
+                    { id: 3, name: "1. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.5, ry: 0.3, rw: 0.25, rh: 0.3 },
+                    { id: 4, name: "2. Çocuk Odası", area: totalNet * 0.13, color: "#e5d4be", rx: 0.75, ry: 0.3, rw: 0.25, rh: 0.3 },
+                    { id: 5, name: "Mutfak", area: totalNet * 0.12, color: "#d8dee9", rx: 0, ry: 0.5, rw: 0.5, rh: 0.5 },
+                    { id: 6, name: "Banyo", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.5, ry: 0.6, rw: 0.25, rh: 0.4 },
+                    { id: 7, name: "Antre", area: totalNet * 0.08, color: "#cbd5e1", rx: 0.75, ry: 0.6, rw: 0.25, rh: 0.4 }
+                ];
+            }
 
             const tbody = document.getElementById('roomsTableBody');
             tbody.innerHTML = '';
@@ -353,16 +385,16 @@
                 };
             }
 
+            // Parsel Sınırı (Mavi)
             const coords = currentPolygon.geometry.coordinates[0];
             ctx.beginPath();
             coords.forEach((pt, i) => {
                 const s = toScreen(pt);
                 if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
             });
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#3b82f6';
-            ctx.stroke();
+            ctx.lineWidth = 3; ctx.strokeStyle = '#3b82f6'; ctx.stroke();
 
+            // Çekme Sınırı & İç Odalar (Yeşil)
             if (setbackPolygon) {
                 const sCoords = setbackPolygon.geometry.coordinates[0];
                 const screenPts = sCoords.map(toScreen);
@@ -371,11 +403,9 @@
                 ctx.beginPath();
                 screenPts.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
                 ctx.closePath();
-                ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
+                ctx.fillStyle = "rgba(16, 185, 129, 0.2)";
                 ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = "#10b981";
-                ctx.stroke();
+                ctx.lineWidth = 2; ctx.strokeStyle = "#10b981"; ctx.stroke();
 
                 if (generatedRooms.length > 0) {
                     ctx.clip();
@@ -387,10 +417,10 @@
                         const x = minX + room.rx * w, y = minY + room.ry * h;
                         const rw = room.rw * w, rh = room.rh * h;
                         ctx.fillStyle = room.color; ctx.fillRect(x, y, rw, rh);
-                        ctx.strokeStyle = "#111827"; ctx.lineWidth = 2; ctx.strokeRect(x, y, rw, rh);
+                        ctx.strokeStyle = "#111827"; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, rw, rh);
 
                         const cx = x + rw / 2, cy = y + rh / 2;
-                        ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill();
                         ctx.fillStyle = "#111827"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
                         ctx.fillText(room.id, cx, cy + 3); ctx.textAlign = "left";
                     });
